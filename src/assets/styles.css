@@ -1,0 +1,12 @@
+/* 占位样式，确保模块加载成功，避免开发服务器报错 */
+.request-book-tab { padding: 16px; }
+.top-actions { display: flex; gap: 8px; margin-bottom: 12px; }
+.section { margin-top: 16px; }
+.form-row { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; align-items: center; }
+.tab-container { display:flex; gap:8px; margin-top:12px; }
+.tab-btn { padding: 6px 12px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
+.tab-btn.active { background: #409eff; color: #fff; border-color: #409eff; }
+.tab-content { display: none; margin-top: 12px; }
+.tab-content.active { display: block; }
+.error-message { color: #d93025; margin-top:8px }
+.success-message { color: #1a73e8; margin-top:8px }

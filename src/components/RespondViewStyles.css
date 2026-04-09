@@ -1,0 +1,105 @@
+.respond-view {
+  padding: 20px;
+  background-color: #f5f5f5;
+  min-height: 100vh;
+}
+
+.button-group {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+.section {
+  background-color: white;
+  padding: 20px;
+  margin-bottom: 20px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.section h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 15px;
+}
+
+.form-row .el-form-item {
+  flex: 1;
+  min-width: 200px;
+  margin-right: 20px;
+}
+
+.form-row .el-form-item:last-child {
+  margin-right: 0;
+}
+
+/* 进度条样式 */
+.progress {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.progress-node {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: #1890ff;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.progress-node.incomplete {
+  background-color: #ccc;
+  color: #666;
+}
+
+.progress-line {
+  flex: 1;
+  height: 2px;
+  background-color: #1890ff;
+  margin: 0 10px;
+}
+
+.progress-line.incomplete {
+  background-color: #ccc;
+}
+
+.progress-content {
+  flex: 3;
+}
+
+.progress-title {
+  font-weight: bold;
+}
+
+.progress-details {
+  font-size: 14px;
+  color: #666;
+}
+
+.progress-details span {
+  margin-left: 20px;
+  display: inline-block;
+}
+
+.progress-details span:first-child {
+  margin-left: 0;
+}
+
+.progress-details div {
+  margin-top: 5px;
+}
