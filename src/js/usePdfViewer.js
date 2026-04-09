@@ -208,9 +208,31 @@ export const usePdfViewer = () => {
       link.target = '_blank'
       link.rel = 'noopener noreferrer'
 
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      try {
+        document.body.appendChild(link)
+        link.click()
+
+        // 延迟清理，确保点击事件已触发
+        setTimeout(() => {
+          try {
+            if (link.parentNode === document.body) {
+              document.body.removeChild(link)
+            }
+          } catch (cleanupError) {
+            console.warn('清理下载链接失败:', cleanupError)
+          }
+        }, 100)
+      } catch (domError) {
+        console.warn('DOM 操作失败:', domError)
+        // 尝试清理
+        try {
+          if (link.parentNode === document.body) {
+            document.body.removeChild(link)
+          }
+        } catch (cleanupError) {
+          console.warn('清理下载链接失败:', cleanupError)
+        }
+      }
 
       ElMessage.success('正在下载文件...')
     } catch (error) {

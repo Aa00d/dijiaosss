@@ -106,7 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Warning } from '@element-plus/icons-vue'
 
@@ -277,6 +277,25 @@ const closeAfterRead = () => {
     ElMessage.info('请先滑动到底部，再关闭')
   }
 }
+
+// 组件卸载时清理
+onUnmounted(() => {
+  // 确保退出全屏
+  if (isFullscreen.value && document.fullscreenElement) {
+    try {
+      document.exitFullscreen?.() ||
+      (document as any).webkitExitFullscreen?.() ||
+      (document as any).mozCancelFullScreen?.() ||
+      (document as any).msExitFullscreen?.()
+    } catch (e) {
+      console.warn('退出全屏失败:', e)
+    }
+  }
+  // 重置所有状态
+  isFullscreen.value = false
+  error.value = ''
+  canClose.value = false
+})
 </script>
 
 <style scoped>
