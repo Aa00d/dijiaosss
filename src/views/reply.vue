@@ -607,7 +607,7 @@ const { processesId, caseId } = getParamsFromUrl();
 // 响应式变量，直接使用从URL获取的参数作为初始值
 const case_processes_id = ref(processesId || ""); // 处理事项ID
 const case_id = ref(caseId || ""); // 案件ID
-const API_BASE_URL = "http://106.52.57.109:8082/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 // 上传ZIP二进制流到新接口
 const uploadZipBytes = async (arrayBuffer) => {
@@ -637,7 +637,7 @@ const uploadZipBytes = async (arrayBuffer) => {
     console.log("");
 
     // 上传接口使用与著录变更相同的服务器
-    const uploadApiBaseUrl = "http://8.140.210.30:8082/api";
+    const uploadApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
     const url = `${uploadApiBaseUrl}/files/upload-by-bytes?case_processes_id=${processesId}&case_id=${caseId}&submission_page=${encodeURIComponent("答复审查意见")}`;
 
     console.log("🔧 实际请求信息:");
@@ -959,7 +959,7 @@ const fetchReviewResponseById = async () => {
   // 使用从URL获取的case_processes_id和case_id进行查询
   const { processesId, caseId } = getParamsFromUrl();
   const response = await fetch(
-    `http://106.52.57.109:8082/api/review-response/by-case?case_processes_id=${encodeURIComponent(processesId || case_processes_id.value)}&case_id=${encodeURIComponent(caseId || case_id.value)}`,
+    `${API_BASE_URL}/review-response/by-case?case_processes_id=${encodeURIComponent(processesId || case_processes_id.value)}&case_id=${encodeURIComponent(caseId || case_id.value)}`,
     { method: "GET" },
   );
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1836,16 +1836,13 @@ async function onSave() {
     const queryParams = `case_processes_id=${processesId || ""}&case_id=${caseId || ""}&submission_page=答复审查`;
 
     // 发送保存请求，使用URL查询参数
-    const response = await fetch(
-      `http://106.52.57.109:8082/api/review-response/save?${queryParams}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(saveData),
+    const response = await fetch(`${API_BASE_URL}/review-response/save?${queryParams}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify(saveData),
+    });
 
     const result = await response.json();
 
@@ -2526,7 +2523,7 @@ async function submitReviewResponse(actionType = "save") {
       // 处理返回的zip文件
       const blob = await response.blob();
       try {
-        if (zipData && typeof zipData === "object" && "value" in zipData) {
+        if (zipData.value && typeof zipData.value === "object" && "value" in zipData.value) {
           const buffer = await blob.arrayBuffer();
           zipData.value = buffer;
           console.log("✅ 已将zip文件数据赋值给zipData用于预览");
