@@ -1,4 +1,4 @@
-import { ElMessage } from 'element-plus'
+import { ElMessage } from "element-plus";
 
 /**
  * 上传zip二进制流到数据库的函数
@@ -27,71 +27,71 @@ export const useUploadZipBytes = async (options = {}) => {
     arrayBuffer,
     caseProcessesId = 2001,
     caseId = 1001,
-    submissionPage = '请求书',
-    baseUrl = 'http://106.53.9.56:8082/api'
-  } = options
+    submissionPage = "请求书",
+    baseUrl = import.meta.env.VITE_API_BASE_URL,
+  } = options;
 
   try {
     // 验证必填参数
     if (!arrayBuffer) {
-      throw new Error('arrayBuffer参数不能为空')
+      throw new Error("arrayBuffer参数不能为空");
     }
 
     // 构建URL，使用正确的参数格式和编码
-    const url = `${baseUrl}/files/upload-by-bytes?case_processes_id=${caseProcessesId}&case_id=${caseId}&submission_page=${encodeURIComponent(submissionPage)}`
+    const url = `${baseUrl}/files/upload-by-bytes?case_processes_id=${caseProcessesId}&case_id=${caseId}&submission_page=${encodeURIComponent(submissionPage)}`;
 
-    console.log('准备上传zip二进制流:', {
+    console.log("准备上传zip二进制流:", {
       url: url,
       fileSize: arrayBuffer.byteLength,
       case_processes_id: caseProcessesId,
       case_id: caseId,
-      submission_page: submissionPage
-    })
+      submission_page: submissionPage,
+    });
 
     // 使用fetch API上传二进制流
     const resp = await fetch(url, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/octet-stream'
+        "Content-Type": "application/octet-stream",
       },
-      body: arrayBuffer // 直接使用ArrayBuffer作为请求体
-    })
+      body: arrayBuffer, // 直接使用ArrayBuffer作为请求体
+    });
 
     // 检查响应状态
     if (!resp.ok) {
-      throw new Error(`HTTP错误! 状态码: ${resp.status}`)
+      throw new Error(`HTTP错误! 状态码: ${resp.status}`);
     }
 
     // 解析响应JSON
-    const json = await resp.json()
-    console.log('上传zip二进制流成功:', json)
+    const json = await resp.json();
+    console.log("上传zip二进制流成功:", json);
 
     // 显示成功消息
     if (json.success) {
-      ElMessage.success('文件上传成功')
+      ElMessage.success("文件上传成功");
     } else {
-      ElMessage.warning(`上传完成，但有问题: ${json.message || '未知错误'}`)
+      ElMessage.warning(`上传完成，但有问题: ${json.message || "未知错误"}`);
     }
 
-    return json
+    return json;
   } catch (err) {
-    console.error('上传zip二进制流失败:', err)
+    console.error("上传zip二进制流失败:", err);
 
     // 诊断错误类型
-    let errorMsg = '上传失败'
+    let errorMsg = "上传失败";
 
-    if (err.message?.includes('404')) {
-      errorMsg = '接口不存在(404)，请检查URL和参数是否正确'
-    } else if (err.message?.includes('ERR_CONNECTION_RESET')) {
-      errorMsg = '连接被重置，可能是网络问题或服务器拒绝连接'
+    if (err.message?.includes("404")) {
+      errorMsg = "接口不存在(404)，请检查URL和参数是否正确";
+    } else if (err.message?.includes("ERR_CONNECTION_RESET")) {
+      errorMsg = "连接被重置，可能是网络问题或服务器拒绝连接";
     } else if (err.message) {
-      errorMsg = err.message
+      errorMsg = err.message;
     }
 
-    ElMessage.error(`上传zip文件到数据库失败: ${errorMsg}`)
-    throw err
+    ElMessage.error(`上传zip文件到数据库失败: ${errorMsg}`);
+    throw err;
   }
-}
+};
 
 /**
  * 示例用法
@@ -114,5 +114,4 @@ export const exampleUsage = async () => {
     console.error('上传失败:', error)
   }
   */
-}
-
+};
