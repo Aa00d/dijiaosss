@@ -95,7 +95,7 @@ export async function readExcelFile(file) {
       return []
     }
 
-    ElMessage.success(`成功读取Excel文件（工作表：${chosenSheet}，行数：${bestMeta?.rowsCount ?? chosenData.length}，包含名称：${bestMeta?.hasName ? '是' : '否'}，包含用途：${bestMeta?.hasUsage ? '是' : '否'}）`)
+    //ElMessage.success(`成功读取Excel文件（工作表：${chosenSheet}，行数：${bestMeta?.rowsCount ?? chosenData.length}，包含名称：${bestMeta?.hasName ? '是' : '否'}，包含用途：${bestMeta?.hasUsage ? '是' : '否'}）`)
     return chosenData
   } catch (error) {
     console.error('❌ 读取Excel文件出错:', error)
