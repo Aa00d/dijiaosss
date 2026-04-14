@@ -2324,7 +2324,7 @@ const handleAddRemark = () => {
       <el-button type="primary" @click="transferForm">移交</el-button>
       <el-button type="primary" @click="deleteForm">删除</el-button>
       <!-- <el-button type="primary" @click="onQueryAll">查询所有</el-button> -->
-      <el-button type="primary" @click="executeIdQuery">查询</el-button>
+      <el-button type="primary" @click="executeIdQuery" disabled>查询</el-button>
       <!-- <el-button type="primary" @click="openIdQueryModal">id查询</el-button> -->
       <!-- <el-button @click="resetForm">重置</el-button> -->
     </div>

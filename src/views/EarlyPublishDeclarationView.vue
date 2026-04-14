@@ -7,7 +7,7 @@
       <el-button type="primary">退回</el-button>
       <el-button type="primary">移交</el-button>
       <el-button type="primary">删除</el-button>
-      <el-button type="primary" @click="executeIdQuery">查询id</el-button>
+      <el-button type="primary" @click="executeIdQuery" disabled>查询id</el-button>
     </div>
 
     <!-- 案件信息 -->
