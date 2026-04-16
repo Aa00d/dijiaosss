@@ -874,8 +874,8 @@ onMounted(async () => {
       <el-button type="primary" @click="onReturn">退回</el-button>
       <el-button type="primary" @click="onTransfer">移交</el-button>
       <el-button type="primary" @click="onDelete">删除</el-button>
-      <el-button type="primary" @click="onQueryAll">查询所有</el-button>
-      <el-button type="primary" @click="onQueryById">id查询</el-button>
+      <el-button type="primary" @click="onQueryAll" disabled>查询所有</el-button>
+      <el-button type="primary" @click="onQueryById" disabled>id查询</el-button>
     </div>
 
     <!-- 案件信息表单 -->

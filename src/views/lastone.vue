@@ -3513,7 +3513,7 @@ onMounted(async () => {
       <el-button type="primary" @click="returnForm">退回</el-button>
       <el-button type="primary" @click="transferForm">移交</el-button>
       <el-button type="primary" @click="deleteForm">删除</el-button>
-      <el-button type="primary" @click="openIdQueryModal">id查询</el-button>
+      <el-button type="primary" @click="openIdQueryModal" disabled>id查询</el-button>
     </div>
 
     <!-- 案件信息 -->

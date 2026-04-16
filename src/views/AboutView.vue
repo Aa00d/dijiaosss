@@ -8,7 +8,7 @@
       <el-button type="primary">退回</el-button>
       <el-button type="primary">移交</el-button>
       <el-button type="primary" @click="deleteForm">删除</el-button>
-      <el-button type="primary" @click="openIdQueryModal">ID查询</el-button>
+      <el-button type="primary" @click="openIdQueryModal" disabled>ID查询</el-button>
       <!-- 新增：上传DOCX与图片按钮 -->
       <!-- <el-button type="primary" @click="newApplicationFileInput?.click()">上传Word(DOCX)</el-button>
   <el-button type="primary" @click="imagesInputRef?.click()">上传图片</el-button> -->
