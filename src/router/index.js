@@ -62,7 +62,7 @@ const router = createRouter({
     { path: '/withdraw', name: 'withdraw', component: WithdrawPatentView },
     // 评价报告或检索报告√
     { path: '/report', name: 'report', component: ReportView },
-
+     // 实质审查√
       { path: '/substantive-examination', name: 'substantive-examination', component: Substantiveexamination },
       // 意见陈述（关于费用）√
       { path: '/fee-opinion-statement', name: 'fee-opinion-statement', component: FeeOpinionStatement },
