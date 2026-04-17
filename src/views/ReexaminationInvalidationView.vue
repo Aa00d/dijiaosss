@@ -1318,34 +1318,26 @@ const onSubmit = async () => {
       return;
     }
 
-    const form = new FormData();
-    const statementStr = buildStatementRecheckString();
-    const mysqlStr = buildMysqlString();
-    form.append("StatementRecheckString", statementStr);
-    form.append("MysqlString", mysqlStr);
-    // docx：按后端要求，使用 formData.opinion 提交纯文本字符串
-    form.append("docx", docxText || "");
-
-    // images字段：直接提交URL数组
     if (imagesUrls.value.length === 0) {
       ElMessage.error("请至少上传一份无效委托书扫描件（用于 images 字段）");
       return;
     }
 
-    // 直接提交URL数组，不下载文件
-    imagesUrls.value.forEach((url, index) => {
-      form.append(`images[${index}]`, url);
-    });
-    console.log("📤 images字段已添加:", imagesUrls.value.length, "个URL");
-
-    // comparisonPage：直接提交URL和名称
     if (comparisonPageUrls.value.length === 0) {
       ElMessage.error("请至少上传一个附件（用于 comparisonPage 字段）");
       return;
     }
 
-    // 直接提交URL和名称，不下载文件
-    comparisonPageUrls.value.forEach(({ url, name }, idx) => {
+    const { case_id } = idsForActions();
+    const caseIdNum = Number(case_id);
+    if (!case_id || !Number.isFinite(caseIdNum)) {
+      ElMessage.error("缺少有效的案件 ID，请通过 URL 提供 case_id");
+      return;
+    }
+
+    const statementStr = buildStatementRecheckString();
+
+    const comparisonPage = comparisonPageUrls.value.map(({ url, name }) => {
       const n = (name || "").trim();
       const finalName =
         n ||
@@ -1354,56 +1346,35 @@ const onSubmit = async () => {
           .pop()
           ?.replace(/\.(pdf|docx?)$/i, "") ||
         "附件";
-      form.append(`comparisonPage[${idx}].url`, url);
-      form.append(`comparisonPage[${idx}].name`, finalName);
+      return { file: url, name: finalName };
     });
-    console.log("📤 comparisonPage字段已添加:", comparisonPageUrls.value.length, "个URL");
-    if (textFile.value) form.append("text_file", textFile.value, textFile.value.name);
 
-    form.append("attachments", JSON.stringify(fileTableData.value));
-    form.append(
-      "internet_evidence",
-      JSON.stringify({
-        enabled: !!internetEvidence.value,
-        evidence_name: evidenceName.value,
-        evidence_number: evidenceNumber.value,
-      }),
-    );
-    form.append("latestUploadedFiles", JSON.stringify(latestFilesPayload));
+    const payload = {
+      images: [...imagesUrls.value],
+      comparisonPage,
+      docx: docxText.trim(),
+      case_id: caseIdNum,
+      statementRecheckString: statementStr,
+    };
 
-    // 注意：XML端点不需要 case_id / case_processes_id，移除这两个字段的提交
+    console.group("🧪 复审意见陈述无效转档 JSON（POST /word/recheckstatement/xml）");
+    console.log("- docx 长度:", (docxText || "").length);
+    console.log("- images 数量:", payload.images.length);
+    console.log("- comparisonPage 数量:", payload.comparisonPage.length);
+    console.log("- case_id:", payload.case_id);
+    console.log("- statementRecheckString 长度:", statementStr.length);
+    console.groupEnd();
 
-    // ===== 调试信息：提交摘要 =====
-    try {
-      const formDataSummary: Record<string, any> = {};
-      for (const [key, value] of (form as any).entries()) {
-        formDataSummary[key] =
-          value instanceof File
-            ? value.name
-            : typeof value === "string"
-              ? key === "docx"
-                ? value.length > 80
-                  ? value.slice(0, 80) + "…"
-                  : value
-                : value
-              : value;
-      }
-      console.group("🧪 无效复审XML提交测试信息");
-      console.log("- docx长度:", (docxText || "").length);
-      console.log("- 无效委托书扫描件(images)数量:", imagesUrls.value.length, "（URL数量）");
-      console.log("- comparisonPage数量:", comparisonPageUrls.value.length, "（URL数量）");
-      console.log("- StatementRecheckString长度:", statementStr.length);
-      console.log("- MysqlString长度:", mysqlStr.length);
-      console.log("- FormData摘要:", formDataSummary);
-      console.groupEnd();
-    } catch (e) {
-      console.warn("打印FormData摘要失败：", e);
-    }
+    ElMessage.info("正在启动转档XML，请稍候...");
 
-    const endpoint = `http://47.108.144.113:9111/api/word/recheckstatement/xml`;
+    const endpoint = `${API_BASE_URL}/word/recheckstatement/xml`;
     console.log("[ReexaminationInvalidationView] POST", endpoint);
 
-    const resp = await fetch(endpoint, { method: "POST", body: form });
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
     const contentType = resp.headers.get("content-type");
     const contentDisposition = resp.headers.get("content-disposition");
