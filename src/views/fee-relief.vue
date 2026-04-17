@@ -182,6 +182,12 @@ const submitCostRelief = async () => {
     form.append("rateReliefString", JSON.stringify(rateReliefString));
     form.append("customerName", customerNameToSend);
 
+    // 从URL获取case_id并添加到FormData
+    const urlParams = new URLSearchParams(window.location.search);
+    const caseId = urlParams.get("case_id") || "";
+    form.append("case_id", caseId);
+    console.log("📋 添加 case_id 到 FormData:", caseId);
+
     const params = {
       rateReliefString: JSON.stringify(rateReliefString),
       customerName: customerNameToSend,
