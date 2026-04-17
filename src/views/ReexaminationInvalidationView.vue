@@ -14,6 +14,9 @@ import { useUploadZipBytes } from "../js/useUploadZipBytes.js";
 
 // =================== 新增/调整：API 常量 ===================
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const CONVERT_API_BASE_URL =
+  import.meta.env.VITE_CONVERT_API_BASE_URL ||
+  (import.meta.env.DEV ? "/api-convert" : "http://47.108.144.113:9111/api");
 const UPLOAD_API_URL = import.meta.env.VITE_API_BASE_URL + "/files/upload-with-code";
 const FILE_QUERY_API_URL = import.meta.env.VITE_API_BASE_URL + "/files/list-by-submission";
 
@@ -1280,26 +1283,8 @@ const onSubmit = async () => {
   try {
     updateDateInfo();
 
-    // 必填校验：docx 文本内容（来源 formData.opinion，增加测试信息）
+    // docx 为可选：接口仍传字符串，无正文时传空串
     const docxText = (formData.opinion ?? "").toString();
-    if (!docxText || !docxText.trim()) {
-      const raw = docxText ?? "";
-      console.group("🧪 docx 必填校验");
-      console.log("- 原值长度:", raw.length);
-      console.log("- 去空白后长度:", raw.trim().length);
-      console.log("- 前80字符预览:", raw.slice(0, 80));
-      console.log("- 判定: 空内容，阻止提交");
-      console.groupEnd();
-      ElMessage.error("docx 字段为必填，请填写内容");
-      return;
-    } else {
-      const raw = docxText;
-      console.group("🧪 docx 必填校验");
-      console.log("- 原值长度:", raw.length);
-      console.log("- 去空白后长度:", raw.trim().length);
-      console.log("- 判定: 合格，继续提交");
-      console.groupEnd();
-    }
 
     if (attachmentFilePayload.value.length === 0) {
       ElMessage.warning("请至少上传一个附件文件");
@@ -1352,7 +1337,7 @@ const onSubmit = async () => {
     const payload = {
       images: [...imagesUrls.value],
       comparisonPage,
-      docx: docxText.trim(),
+      docx: docxText.trim() || "",
       case_id: caseIdNum,
       statementRecheckString: statementStr,
     };
@@ -1367,7 +1352,7 @@ const onSubmit = async () => {
 
     ElMessage.info("正在启动转档XML，请稍候...");
 
-    const endpoint = `${API_BASE_URL}/word/recheckstatement/xml`;
+    const endpoint = `${CONVERT_API_BASE_URL}/word/recheckstatement/xml`;
     console.log("[ReexaminationInvalidationView] POST", endpoint);
 
     const resp = await fetch(endpoint, {
@@ -1382,20 +1367,51 @@ const onSubmit = async () => {
     console.log("Content-Type:", contentType);
     console.log("Content-Disposition:", contentDisposition);
     if (resp.ok) {
-      if (
-        (contentType && contentType.includes("application/zip")) ||
-        (contentType && contentType.includes("application/octet-stream"))
-      ) {
-        const blob = await resp.blob();
-        if (blob.size === 0) {
-          ElMessage.error("服务器返回了空文件");
-          return;
+      const blob = await resp.blob();
+      if (blob.size === 0) {
+        ElMessage.error("服务器返回了空文件");
+        return;
+      }
+
+      const head = await blob.slice(0, 2).arrayBuffer();
+      const u8h = new Uint8Array(head);
+      const looksLikeZip = u8h.length >= 2 && u8h[0] === 0x50 && u8h[1] === 0x4b;
+      const ct = contentType || "";
+      const ctLooksZip =
+        ct.includes("application/zip") ||
+        ct.includes("application/octet-stream") ||
+        ct.includes("application/x-zip-compressed");
+
+      if (ctLooksZip || looksLikeZip) {
+        let filename = "复审无效转档.zip";
+        if (contentDisposition) {
+          const m = contentDisposition.match(/filename\*?=(?:UTF-8'')?["']?([^;"']+)["']?/);
+          if (m && m[1]) {
+            try {
+              filename = decodeURIComponent(m[1].trim().replace(/^UTF-8''/, "").replace(/^"|"$/g, ""));
+            } catch {
+              filename = m[1];
+            }
+          }
         }
 
-        // 将blob转换为ArrayBuffer，准备上传到数据库
+        try {
+          const href = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = href;
+          a.download = filename;
+          a.rel = "noopener";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(href);
+          ElMessage.success("已开始下载转档压缩包");
+        } catch (dlErr) {
+          console.warn("本地下载触发失败:", dlErr);
+        }
+
         const arrayBuffer = await blob.arrayBuffer();
 
-        // 上传zip二进制流到数据库
         try {
           const { case_id, case_processes_id } = idsForActions();
           console.log("📤 开始上传zip二进制流到数据库:", {
@@ -1411,20 +1427,17 @@ const onSubmit = async () => {
             caseId: case_id,
             submissionPage: "复审无效",
             apiBaseUrl: API_BASE_URL,
-            special: "666", // 设置 special=666，标识为已转档文件
+            special: "666",
           } as any);
 
           console.log("✅ 二进制流已上传到数据库:", uploadResult);
           ElMessage.success("转档成功，二进制流已上传到数据库");
 
-          // 上传成功后，延迟调用查询接口获取 special=666 的文件列表
-          // 延迟确保数据库已保存文件
           setTimeout(async () => {
             console.log("🔄 上传成功后，查询已转档文件列表（special=666）...");
             await queryProcessedFiles();
           }, 1000);
         } catch (uploadErr) {
-          // 上传失败则抛出错误
           console.error("❌ 上传zip文件到数据库失败:", uploadErr);
           ElMessage.error(
             `上传到数据库失败：${uploadErr instanceof Error ? uploadErr.message : "未知错误"}`,
@@ -1432,11 +1445,21 @@ const onSubmit = async () => {
           throw uploadErr;
         }
       } else {
-        // 如果返回的不是二进制流，尝试解析JSON响应
         try {
-          const data = await resp.json();
-          ElMessage.success("提交成功");
-          console.log("[ReexaminationInvalidationView] submit success:", data);
+          const text = await blob.text();
+          let data: Record<string, unknown> | null = null;
+          try {
+            data = JSON.parse(text) as Record<string, unknown>;
+          } catch {
+            /* 非 JSON */
+          }
+          if (data) {
+            ElMessage.success("提交成功");
+            console.log("[ReexaminationInvalidationView] submit success:", data);
+          } else {
+            ElMessage.success("提交成功");
+            console.log("[ReexaminationInvalidationView] submit success, body:", text);
+          }
         } catch (e) {
           ElMessage.success("提交成功");
           console.log("[ReexaminationInvalidationView] submit success, unknown response format");

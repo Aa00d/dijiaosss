@@ -29,8 +29,11 @@ const zipData = ref<ArrayBuffer | null>(null);
 const router = useRouter();
 const route = useRoute();
 
-// API配置（开发环境 .env.development 中应为 /api，走 Vite 代理避免 CORS）
+// API配置：查询等业务用 VITE_API_BASE_URL；转档用 VITE_CONVERT_API_BASE_URL（勿回退到 API_BASE_URL，否则会跨域）
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const CONVERT_API_BASE_URL =
+  import.meta.env.VITE_CONVERT_API_BASE_URL ||
+  (import.meta.env.DEV ? "/api-convert" : "http://47.108.144.113:9111/api");
 
 // 获取URL参数
 const getQueryParams = () => {
@@ -2075,7 +2078,7 @@ const onStartXmlConversion = async () => {
 
     ElMessage.info("正在启动转档XML，请稍候...");
 
-    const declareXmlUrl = `${API_BASE_URL}/declare/xml`;
+    const declareXmlUrl = `${CONVERT_API_BASE_URL}/declare/xml`;
     console.log("🌐 POST", declareXmlUrl);
 
     const response = await fetch(declareXmlUrl, {
@@ -2116,17 +2119,22 @@ const onStartXmlConversion = async () => {
       }
     })();
 
-    // 不再自动下载文件，只保存数据用于后续处理
-    // 下载文件（已注释，点击不会下载）
-    // const url = window.URL.createObjectURL(blob)
-    // const a = document.createElement("a")
-    // a.href = url
-    // a.download = filename
-    // a.click()
-    // window.URL.revokeObjectURL(url)
-
     if (isZip) {
-      ElMessage.success("✅ 转档XML成功，文件已上传到服务器");
+      try {
+        const downloadBlob = new Blob([buffer], { type: "application/zip" });
+        const href = URL.createObjectURL(downloadBlob);
+        const a = document.createElement("a");
+        a.href = href;
+        a.download = filename;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(href);
+        ElMessage.success("已开始下载转档压缩包");
+      } catch (dlErr) {
+        console.warn("本地下载触发失败:", dlErr);
+      }
       // 转档成功后，继续将 ZIP 二进制流上传至文件服务以解包并入库
       try {
         const cpId = idQueryForm.case_processes_id;
@@ -2169,7 +2177,7 @@ const onStartXmlConversion = async () => {
       }
     } else {
       try {
-        const responseText = (await new Response(blob).text()).trim();
+        const responseText = new TextDecoder("utf-8", { fatal: false }).decode(u8).trim();
         // 将常见的简单文本视为成功
         if (
           responseText === "1" ||
@@ -2178,25 +2186,42 @@ const onStartXmlConversion = async () => {
           responseText.toLowerCase() === "success"
         ) {
           ElMessage.success("✅ 转档XML成功（文本响应）");
-          // 刷新已转档文件列表（special=666）
           await loadProcessedFiles();
         } else {
-          // 尝试解析JSON
           let parsed: any = null;
           try {
             parsed = JSON.parse(responseText);
-          } catch {}
-          if (parsed && (parsed.code === 200 || parsed.success === true)) {
-            ElMessage.success("✅ 转档XML成功");
-            // 刷新已转档文件列表（special=666）
-            await loadProcessedFiles();
+          } catch {
+            /* 非 JSON */
+          }
+          // 部分后端 HTTP 200 但 body 为业务错误 JSON（如 code:20005），需优先展示 message
+          if (parsed && typeof parsed === "object") {
+            const code = parsed.code;
+            const bizOk =
+              parsed.success === true ||
+              code === 200 ||
+              code === 0 ||
+              code === "200" ||
+              code === "0";
+            if (bizOk) {
+              ElMessage.success("✅ 转档XML成功");
+              await loadProcessedFiles();
+            } else if (parsed.message) {
+              ElMessage.error(parsed.message);
+            } else {
+              ElMessageBox.alert(`转档未生成 ZIP：\n${responseText}`, "响应提示", {
+                type: "warning",
+              });
+            }
           } else {
-            ElMessageBox.alert(`接口返回非ZIP数据：\n${responseText}`, "响应提示", {
+            ElMessageBox.alert(`接口返回非 ZIP 数据：\n${responseText}`, "响应提示", {
               type: "info",
             });
           }
         }
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     }
   } catch (error: any) {
     console.error("❌ 转档XML接口请求错误：", error);

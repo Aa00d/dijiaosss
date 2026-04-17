@@ -10,8 +10,11 @@ import { useUploadZipBytes } from "../js/useUploadZipBytes.js";
 import { getFilesBySubmission } from "../js/useFileList.js";
 import { usePdfViewer } from "../js/usePdfViewer.js";
 import ZipPreview from "../components/ZipPreview.vue";
-// API配置
+// API配置：查询等业务用 VITE_API_BASE_URL；转档用 VITE_CONVERT_API_BASE_URL（勿回退到 API_BASE_URL）
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const CONVERT_API_BASE_URL =
+  import.meta.env.VITE_CONVERT_API_BASE_URL ||
+  (import.meta.env.DEV ? "/api-convert" : "http://47.108.144.113:9111/api");
 
 // PDF 查看器
 const pdfViewer = usePdfViewer() as any;
@@ -631,6 +634,7 @@ const fetchOpinionFilesBySubmissionLocal = async (params: OpinionQueryParams) =>
     uploaded.fileUrl = fileUrl;
     uploaded.fileBaseUrl = it?.fileBaseUrl || fileUrl || ""; // 如果fileBaseUrl为空，使用fileUrl
     (uploaded as any).special = special;
+    (uploaded as any).internalCode = internalCode;
 
     // 更健壮的分类：
     // - 意见陈述（基础判断）：内部代码B100012，或类型包含“意见陈述/陈述”，或扩展名为doc/docx
@@ -645,12 +649,11 @@ const fetchOpinionFilesBySubmissionLocal = async (params: OpinionQueryParams) =>
       (special === "1" && ext === "pdf" && !opinionBase);
     const isOpinion = opinionBase && !isComparison;
 
-    // 仅将 special=1 的文件映射到“意见陈述/对比页”两个列表；其他（非666且非1）统一进入“其他证明文件”
+    // 对比类：无论 special 是否=1 都进入 comparisons，避免接口返回 special≠1 时只剩 URL 却不在对比列表
     if (isComparison) {
-      if (special === "1") {
-        comparisons.push(uploaded);
-        if (fileUrl) comparisonSpecialUrlsLocal.push(fileUrl);
-      } else {
+      comparisons.push(uploaded);
+      if (special === "1" && fileUrl) comparisonSpecialUrlsLocal.push(fileUrl);
+      if (special !== "1") {
         proofs.push(uploaded);
       }
     } else if (isOpinion) {
@@ -879,25 +882,134 @@ const refreshProcessedFiles = async () => {
 
 // onMounted 函数在下面定义，这里先注释掉
 
-const submitForm = async () => {
-  loading.value = true;
-  // comparisonPage 允许为空；若选择了文件，则在后续校验 PDF 格式
-
-  // comparisonPage 必须为 PDF 格式
+/** 与 POST /api/word/improper/xml 约定一致：improperString = { notifications, RegulationAmendment } */
+function buildImproperXmlString(): string {
+  const raw = (improperForm.improperString || "").trim();
+  if (raw && raw !== "{}") {
+    try {
+      return JSON.stringify(JSON.parse(raw));
+    } catch {
+      return raw;
+    }
+  }
+  const notificationsPayload: Notification[] = [];
   if (
-    comparisonFile.value &&
-    comparisonFile.value.type !== "application/pdf" &&
-    !/\.pdf$/i.test(comparisonFile.value.name || "")
+    improperForm.patentOfficeInfo1.patent_office_date ||
+    improperForm.patentOfficeInfo1.issued_content ||
+    improperForm.patentOfficeInfo1.notice_document_number
   ) {
-    ElMessage.error("对比页 (comparisonPage) 仅支持 PDF 格式。");
-    loading.value = false;
-    return;
+    notificationsPayload.push({
+      type: 0,
+      date: improperForm.patentOfficeInfo1.patent_office_date || "",
+      name: improperForm.patentOfficeInfo1.issued_content || undefined,
+      serialNumber: improperForm.patentOfficeInfo1.notice_document_number || "",
+    });
+  }
+  if (
+    improperForm.patentOfficeInfo2.patent_office_date ||
+    improperForm.patentOfficeInfo2.issued_content ||
+    improperForm.patentOfficeInfo2.notice_document_number
+  ) {
+    notificationsPayload.push({
+      type: 1,
+      date: improperForm.patentOfficeInfo2.patent_office_date || "",
+      name: improperForm.patentOfficeInfo2.issued_content || undefined,
+      serialNumber: improperForm.patentOfficeInfo2.notice_document_number || "",
+    });
+  }
+  const notifications =
+    notificationsPayload.length > 0 ? notificationsPayload : [...improperForm.notifications];
+  return JSON.stringify({
+    notifications,
+    RegulationAmendment: true,
+  });
+}
+
+/** 将相对路径、OSS 路径规范为可请求的 http(s)（转档接口校验用） */
+function normalizeToHttpUrl(input: string): string {
+  const s = (input || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith("/")) {
+    if (typeof window !== "undefined") {
+      return `${window.location.origin}${s}`;
+    }
+    return s;
+  }
+  if (s.startsWith("cases/")) {
+    return `${API_BASE_URL}/files/download?path=${encodeURIComponent(s)}`;
+  }
+  if (!s.includes("://")) {
+    const base = String(API_BASE_URL || "").replace(/\/$/, "");
+    return `${base}/${s.replace(/^\//, "")}`;
+  }
+  return s;
+}
+
+function getUrlFromFileItem(item: any): string {
+  if (!item) return "";
+  let raw =
+    item.fileBaseUrl ||
+    item.fileUrl ||
+    item.file_url ||
+    item.url ||
+    item.base_url ||
+    item.baseUrl ||
+    "";
+  if (!String(raw).trim() && (item.fileId || item.id)) {
+    const fid = item.fileId ?? item.id;
+    raw = `${API_BASE_URL}/file/download/${fid}`;
+  }
+  return normalizeToHttpUrl(String(raw).trim());
+}
+
+/** 对比页 URL：多字段、多列表回退，避免已上传但 URL 为相对路径或非 special=1 分类导致取不到 */
+function pickComparisonPageUrlForSubmit(): string {
+  const tryList = (list: any[]) => {
+    for (let i = list.length - 1; i >= 0; i--) {
+      const u = getUrlFromFileItem(list[i]);
+      if (u) return u;
+    }
+    return "";
+  };
+
+  let u = tryList(comparisonFileList.value);
+  if (u) return u;
+
+  for (let i = comparisonSpecialUrls.value.length - 1; i >= 0; i--) {
+    u = normalizeToHttpUrl(comparisonSpecialUrls.value[i]);
+    if (u) return u;
   }
 
-  try {
-    const formData = new FormData();
+  for (let i = proofFileList.value.length - 1; i >= 0; i--) {
+    const it: any = proofFileList.value[i];
+    const code = String(it?.internalCode || "");
+    const name = String(it?.fileName || it?.uploadedFileName || "");
+    if (code === "B100042" || /对照|对比/i.test(name)) {
+      u = getUrlFromFileItem(it);
+      if (u) return u;
+    }
+  }
 
-    // 选择策略：优先选择 special=1 的最新文件，其次选择列表最后一个，最后回退到本地文件名
+  return "";
+}
+
+const submitForm = async () => {
+  loading.value = true;
+
+  try {
+    const urlParams = getUrlParamsWithDefaults();
+    const caseIdRaw = String(
+      idQueryForm.caseId || urlParams.caseId || caseIdFixed.value || "",
+    ).trim();
+    const caseIdNum = Number(caseIdRaw);
+    if (!caseIdRaw || !Number.isFinite(caseIdNum)) {
+      ElMessage.error("缺少有效的案件 ID（case_id），请在 URL 中带上 case_id 或在页面填写案件 ID");
+      loading.value = false;
+      return;
+    }
+
+    // 与 curl 一致：multipart 仅含 Statement、comparisonPage、docx、case_id、improperString（不设 Content-Type，由浏览器带 boundary）
     const pickLatestSpecialOne = (list: any[]) => {
       const arr = Array.isArray(list) ? list : [];
       for (let i = arr.length - 1; i >= 0; i--) {
@@ -908,115 +1020,36 @@ const submitForm = async () => {
       return arr[arr.length - 1];
     };
 
-    // 将 Statement 和 comparisonPage 改为字符串引用
     const latestOpinionItem: any = pickLatestSpecialOne(opinionFileList.value);
-    const statementRef =
-      latestOpinionItem?.fileBaseUrl ||
-      latestOpinionItem?.fileUrl ||
-      statementFile.value?.name ||
-      "空陈述文件.docx";
-    formData.append("Statement", statementRef);
+    const statementUrl = getUrlFromFileItem(latestOpinionItem) || "";
 
-    const latestComparisonItem: any = pickLatestSpecialOne(comparisonFileList.value);
-    const comparisonRef =
-      latestComparisonItem?.fileBaseUrl ||
-      latestComparisonItem?.fileUrl ||
-      comparisonFile.value?.name ||
-      "空对比页.pdf";
-    formData.append("comparisonPage", comparisonRef);
+    const comparisonRef = pickComparisonPageUrlForSubmit();
 
-    // 字符串字段 - docx：优先发送用户填写的意见文本，其次才用文件名
+    if (!comparisonRef || !/^https?:\/\//i.test(comparisonRef)) {
+      ElMessage.error(
+        "未找到对比页文件的有效下载地址。请上传「对比页」并等待列表中出现文件，或确认接口已返回 fileUrl/oss 地址（相对路径需能解析为 http/https）。",
+      );
+      loading.value = false;
+      return;
+    }
+
     const docxValue =
       (improperForm.opinionContent || "").trim() ||
       statementFile.value?.name ||
       "improper_statement.docx";
+
+    const formData = new FormData();
+    formData.append("Statement", statementUrl);
+    formData.append("comparisonPage", comparisonRef);
     formData.append("docx", docxValue);
-
-    // 处理 StatementSqlString
-    try {
-      const sqlJson = JSON.parse(improperForm.StatementSqlString || "{}");
-      formData.append("StatementSqlString", JSON.stringify(sqlJson));
-    } catch {
-      formData.append("StatementSqlString", improperForm.StatementSqlString || "{}");
-    }
-
-    // 处理 StatementString
-    try {
-      const stmtJson = JSON.parse(improperForm.StatementString || "{}");
-      formData.append("StatementString", JSON.stringify(stmtJson));
-    } catch {
-      formData.append("StatementString", improperForm.StatementString || "{}");
-    }
-
-    // 处理 improperString (优先使用用户自定义的，如果没有则使用默认逻辑)
-    if (improperForm.improperString && improperForm.improperString !== "{}") {
-      try {
-        const improperJson = JSON.parse(improperForm.improperString);
-        formData.append("improperString", JSON.stringify(improperJson));
-      } catch {
-        formData.append("improperString", improperForm.improperString);
-      }
-    } else {
-      // 使用原有的 notifications 逻辑
-      const mapBusinessType = (type: string) => {
-        if (type === "invention") return 0;
-        if (type === "utility") return 1;
-        if (type === "design") return 2;
-        return 2;
-      };
-
-      const sqlJson = {
-        applicationNumber: improperForm.applicationNumber || "",
-        nameInvention: improperForm.caseName || "",
-        CustomerName: improperForm.customerName || "",
-        signature: improperForm.agency || "",
-        institutionCode: "51217",
-        internalNumber: "PCN1252586",
-        businessType: mapBusinessType(improperForm.applicationType || ""),
-        fileType: 1,
-      };
-      formData.append("StatementSqlString", JSON.stringify(sqlJson));
-
-      // 根据页面"通知书"两处输入组装 notifications
-      const notificationsPayload: Notification[] = [];
-      if (
-        improperForm.patentOfficeInfo1.patent_office_date ||
-        improperForm.patentOfficeInfo1.issued_content ||
-        improperForm.patentOfficeInfo1.notice_document_number
-      ) {
-        notificationsPayload.push({
-          type: 0,
-          date: improperForm.patentOfficeInfo1.patent_office_date || "",
-          name: improperForm.patentOfficeInfo1.issued_content || undefined,
-          serialNumber: improperForm.patentOfficeInfo1.notice_document_number || "",
-        });
-      }
-      if (
-        improperForm.patentOfficeInfo2.patent_office_date ||
-        improperForm.patentOfficeInfo2.issued_content ||
-        improperForm.patentOfficeInfo2.notice_document_number
-      ) {
-        notificationsPayload.push({
-          type: 1,
-          date: improperForm.patentOfficeInfo2.patent_office_date || "",
-          name: improperForm.patentOfficeInfo2.issued_content || undefined,
-          serialNumber: improperForm.patentOfficeInfo2.notice_document_number || "",
-        });
-      }
-
-      const statementJson = {
-        notifications: notificationsPayload.length
-          ? notificationsPayload
-          : improperForm.notifications,
-        RegulationAmendment: true,
-      };
-      formData.append("improperString", JSON.stringify(statementJson));
-    }
+    formData.append("case_id", String(caseIdNum));
+    formData.append("improperString", buildImproperXmlString());
 
     // 打印请求参数和输入的东西
     console.group("意见陈述提交参数");
-    const apiUrl = "http://47.108.144.113:9111/api/word/improper/xml";
+    const apiUrl = `${CONVERT_API_BASE_URL}/word/improper/xml`;
     console.log("API URL:", apiUrl);
+    console.log("case_id:", caseIdNum);
     console.log("输入值 improperForm:", improperForm);
     console.log("文件信息:", {
       statementFile: statementFile.value
@@ -1033,8 +1066,8 @@ const submitForm = async () => {
             size: comparisonFile.value.size,
           }
         : null,
-      statementRef,
-      comparisonRef,
+      statementUrl,
+      comparisonPage: comparisonRef,
       docxValue,
     });
     console.log("FormData 内容:");
@@ -1079,26 +1112,43 @@ const submitForm = async () => {
       return;
     }
 
-    if (
+    const blob = await resp.blob();
+    const head = await blob.slice(0, 2).arrayBuffer();
+    const u8h = new Uint8Array(head);
+    const looksLikeZip = u8h.length >= 2 && u8h[0] === 0x50 && u8h[1] === 0x4b;
+    const ctLooksZip =
       contentType.includes("application/zip") ||
       contentType.includes("application/octet-stream") ||
-      contentType.includes("application/x-zip-compressed")
-    ) {
-      // 下载 zip 文件
-      const blob = await resp.blob();
+      contentType.includes("application/x-zip-compressed");
+
+    if (ctLooksZip || looksLikeZip) {
       let filename = "improper_statement.zip";
 
       const cd = resp.headers.get("content-disposition");
       if (cd) {
-        // 常见格式: attachment; filename="xxx.zip"
         const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^;"']+)["']?/);
         if (m && m[1]) {
           filename = decodeURIComponent(m[1]);
         }
       }
 
-      // 当二进制流成功上传给后端之后，后端返回压缩包
-      // 将返回的zip二进制流上传到数据库，设置special为666
+      // 转档成功后本机下载压缩包
+      try {
+        const href = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = href;
+        a.download = filename;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(href);
+        ElMessage.success("已开始下载转档压缩包");
+      } catch (dlErr) {
+        console.warn("本地下载触发失败:", dlErr);
+      }
+
+      // 将 zip 二进制流上传到数据库，设置 special=666
       try {
         const buffer = await blob.arrayBuffer();
 
