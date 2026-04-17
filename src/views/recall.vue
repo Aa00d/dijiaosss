@@ -409,102 +409,122 @@ const currentCaseId = ref<number | null>(null);
 // 防止初始化期间重复请求（仅自动加载时生效）
 const hasLoadedFileListOnce = ref(false);
 const hasLoadedSpecialOnce = ref(false);
+// 防止同一时刻重复进入相同加载逻辑，避免重复提示
+let queryFilesInFlight: Promise<void> | null = null;
+let loadSpecialFilesInFlight: Promise<void> | null = null;
 // 统一缓存 list-by-submission 请求，避免同一初始化阶段重复命中接口
 let filesListFetchPromise: Promise<any> | null = null;
 let filesListCachedResult: any | null = null;
 
 // 查询文件函数（force=true 时忽略一次性限制）
 const queryFiles = async (force: boolean = false) => {
-  try {
-    if (!force && hasLoadedFileListOnce.value) {
-      console.log("⚠️ 文件列表已在初始化阶段加载过，本次跳过重复请求");
-      return;
-    }
-    // 优先使用URL解析的ID值，如果不存在则提示用户
-    if (!currentCaseProcessesId.value || !currentCaseId.value) {
-      console.warn("⚠️ 缺少案件ID参数，无法查询文件列表");
-      ElMessage.warning("请先选择或查询案件信息");
-      return;
-    }
+  if (!force && queryFilesInFlight) {
+    return queryFilesInFlight;
+  }
 
-    const caseProcessesId = currentCaseProcessesId.value.toString();
-    const caseId = currentCaseId.value.toString();
-
-    console.log("开始查询文件列表，参数:", {
-      case_processes_id: caseProcessesId,
-      case_id: caseId,
-      submission_page: "撤回专利",
-    });
-
-    // 统一使用缓存或单次请求
-    let result: any;
-    if (force) {
-      filesListCachedResult = null;
-      filesListFetchPromise = null;
-    }
-    if (filesListCachedResult) {
-      result = filesListCachedResult;
-    } else {
-      if (!filesListFetchPromise) {
-        filesListFetchPromise = getFilesBySubmission({
-          case_processes_id: caseProcessesId,
-          case_id: caseId,
-          submission_page: "撤回专利",
-        });
+  const runner = async () => {
+    try {
+      if (!force && hasLoadedFileListOnce.value) {
+        console.log("⚠️ 文件列表已在初始化阶段加载过，本次跳过重复请求");
+        return;
       }
-      result = await filesListFetchPromise;
-      filesListCachedResult = result;
-      filesListFetchPromise = null;
-    }
+      // 优先使用URL解析的ID值，如果不存在则提示用户
+      if (!currentCaseProcessesId.value || !currentCaseId.value) {
+        console.warn("⚠️ 缺少案件ID参数，无法查询文件列表");
+        ElMessage.warning("请先选择或查询案件信息");
+        return;
+      }
 
-    if (result && result.success && result.files && Array.isArray(result.files)) {
-      // 清空当前文件列表
-      fileList.value = [];
+      const caseProcessesId = currentCaseProcessesId.value.toString();
+      const caseId = currentCaseId.value.toString();
 
-      // 筛选special为1的文件
-      const specialFiles = result.files.filter(
-        (file) => file.special === "1" || file.special === 1,
-      );
-      console.log("筛选后的special为1的文件数量:", specialFiles.length);
-
-      // 格式化并添加筛选后的文件
-      specialFiles.forEach((file, index) => {
-        fileList.value.push({
-          id: file.id || Date.now() + index,
-          sequence: (index + 1).toString(),
-          uploaded_filename: file.fileName || file.uploaded_filename || "未知文件名",
-          file_subtype: file.fileCategoryMinor || "撤回专利申请声明扫描件",
-          file_name: file.fileName || "撤回",
-          file_abbreviation: "JPG",
-          uploader: "未知用户",
-          upload_time: file.createTime || new Date().toISOString(),
-          operation: "删除",
-        });
+      console.log("开始查询文件列表，参数:", {
+        case_processes_id: caseProcessesId,
+        case_id: caseId,
+        submission_page: "撤回专利",
       });
 
-      // 更新附件文件数据
-      recallForm.attachment_files = fileList.value.map((file) => ({
-        sequence: file.sequence,
-        uploaded_filename: file.uploaded_filename,
-        file_subtype: file.file_subtype,
-        file_name: file.file_name,
-        file_abbreviation: file.file_abbreviation,
-        uploader: file.uploader,
-        upload_time: file.upload_time,
-        operation: file.operation,
-      }));
+      // 统一使用缓存或单次请求
+      let result: any;
+      if (force) {
+        filesListCachedResult = null;
+        filesListFetchPromise = null;
+      }
+      if (filesListCachedResult) {
+        result = filesListCachedResult;
+      } else {
+        if (!filesListFetchPromise) {
+          filesListFetchPromise = getFilesBySubmission({
+            case_processes_id: caseProcessesId,
+            case_id: caseId,
+            submission_page: "撤回专利",
+          });
+        }
+        result = await filesListFetchPromise;
+        filesListCachedResult = result;
+        filesListFetchPromise = null;
+      }
 
-      ElMessage.success(`成功查询到 ${specialFiles.length} 个special为1的文件`);
-      console.log("文件列表查询成功并已更新到界面:", specialFiles);
-      hasLoadedFileListOnce.value = true;
-    } else {
-      ElMessage.warning("未查询到文件或返回数据格式异常");
-      console.warn("文件列表查询结果异常:", result);
+      if (result && result.success && result.files && Array.isArray(result.files)) {
+        // 清空当前文件列表
+        fileList.value = [];
+
+        // 筛选special为1的文件
+        const specialFiles = result.files.filter(
+          (file) => file.special === "1" || file.special === 1,
+        );
+        console.log("筛选后的special为1的文件数量:", specialFiles.length);
+
+        // 格式化并添加筛选后的文件
+        specialFiles.forEach((file, index) => {
+          fileList.value.push({
+            id: file.id || Date.now() + index,
+            sequence: (index + 1).toString(),
+            uploaded_filename: file.fileName || file.uploaded_filename || "未知文件名",
+            file_subtype: file.fileCategoryMinor || "撤回专利申请声明扫描件",
+            file_name: file.fileName || "撤回",
+            file_abbreviation: "JPG",
+            uploader: "未知用户",
+            upload_time: file.createTime || new Date().toISOString(),
+            operation: "删除",
+          });
+        });
+
+        // 更新附件文件数据
+        recallForm.attachment_files = fileList.value.map((file) => ({
+          sequence: file.sequence,
+          uploaded_filename: file.uploaded_filename,
+          file_subtype: file.file_subtype,
+          file_name: file.file_name,
+          file_abbreviation: file.file_abbreviation,
+          uploader: file.uploader,
+          upload_time: file.upload_time,
+          operation: file.operation,
+        }));
+
+        ElMessage.success(`成功查询到 ${specialFiles.length} 个special为1的文件`);
+        console.log("文件列表查询成功并已更新到界面:", specialFiles);
+        hasLoadedFileListOnce.value = true;
+      } else {
+        ElMessage.warning("未查询到文件或返回数据格式异常");
+        console.warn("文件列表查询结果异常:", result);
+      }
+    } catch (error) {
+      console.error("查询文件列表失败:", error);
+      ElMessage.error(`查询文件失败: ${error.message || "未知错误"}`);
+    } finally {
+      if (!force) {
+        queryFilesInFlight = null;
+      }
     }
-  } catch (error) {
-    console.error("查询文件列表失败:", error);
-    ElMessage.error(`查询文件失败: ${error.message || "未知错误"}`);
+  };
+
+  if (force) {
+    return runner();
   }
+
+  queryFilesInFlight = runner();
+  return queryFilesInFlight;
 };
 
 // 查询相关数据
@@ -523,84 +543,101 @@ const switchTab = (tabId: string) => {
 
 // 加载special为666的文件（force=true 时忽略一次性限制）
 const loadSpecialFiles = async (force: boolean = false) => {
-  try {
-    if (!force && hasLoadedSpecialOnce.value) {
-      console.log("⚠️ special文件列表已在初始化阶段加载过，本次跳过重复请求");
-      return;
-    }
-    // 验证参数
-    if (!currentCaseProcessesId.value || !currentCaseId.value) {
-      ElMessage.warning("请先选择或查询案件信息");
-      return;
-    }
-
-    const caseProcessesId = currentCaseProcessesId.value.toString();
-    const caseId = currentCaseId.value.toString();
-
-    console.log("加载special为666的文件，参数:", {
-      case_processes_id: caseProcessesId,
-      case_id: caseId,
-      submission_page: "撤回专利",
-    });
-
-    // 统一使用缓存或单次请求
-    let result: any;
-    if (force) {
-      filesListCachedResult = null;
-      filesListFetchPromise = null;
-    }
-    if (filesListCachedResult) {
-      result = filesListCachedResult;
-    } else {
-      if (!filesListFetchPromise) {
-        filesListFetchPromise = getFilesBySubmission({
-          case_processes_id: caseProcessesId,
-          case_id: caseId,
-          submission_page: "撤回专利",
-        });
-      }
-      result = await filesListFetchPromise;
-      filesListCachedResult = result;
-      filesListFetchPromise = null;
-    }
-
-    // 筛选special === 666的数据
-    if (result && result.success && result.files && Array.isArray(result.files)) {
-      const specialFiles = result.files.filter(
-        (file) => file.special === 666 || file.special === "666",
-      );
-
-      // 格式化并更新convertedFiles数据（兼容后端返回的 url 字段，可能包含引号/反引号）
-      convertedFiles.value = specialFiles.map((file, index) => ({
-        id: file.id || Date.now() + index,
-        name: file.fileName || "未知文件名",
-        category: file.fileCategoryMinor || "撤回专利申请声明",
-        title: file.fileName || "撤回",
-        desc: file.description || "",
-        uploader: file.uploader || "未知用户",
-        time: file.createTime || new Date().toISOString(),
-        fileType: file.fileName?.toLowerCase().endsWith(".pdf")
-          ? "pdf"
-          : file.fileName?.toLowerCase().endsWith(".zip")
-            ? "zip"
-            : "other",
-        // 优先取后端的 url，其次 fileUrl；字符串做一次清理
-        url: typeof file.url === "string" ? file.url : file.fileUrl || "",
-        rawFile: file,
-      }));
-
-      console.log("筛选后的special为666的文件列表:", convertedFiles.value);
-      ElMessage.success(`成功加载 ${convertedFiles.value.length} 个已转档文件`);
-      hasLoadedSpecialOnce.value = true;
-    } else {
-      ElMessage.warning("未获取到文件列表数据");
-      convertedFiles.value = [];
-    }
-  } catch (error) {
-    console.error("加载special文件失败:", error);
-    ElMessage.error("加载文件列表失败，请重试");
-    convertedFiles.value = [];
+  if (!force && loadSpecialFilesInFlight) {
+    return loadSpecialFilesInFlight;
   }
+
+  const runner = async () => {
+    try {
+      if (!force && hasLoadedSpecialOnce.value) {
+        console.log("⚠️ special文件列表已在初始化阶段加载过，本次跳过重复请求");
+        return;
+      }
+      // 验证参数
+      if (!currentCaseProcessesId.value || !currentCaseId.value) {
+        ElMessage.warning("请先选择或查询案件信息");
+        return;
+      }
+
+      const caseProcessesId = currentCaseProcessesId.value.toString();
+      const caseId = currentCaseId.value.toString();
+
+      console.log("加载special为666的文件，参数:", {
+        case_processes_id: caseProcessesId,
+        case_id: caseId,
+        submission_page: "撤回专利",
+      });
+
+      // 统一使用缓存或单次请求
+      let result: any;
+      if (force) {
+        filesListCachedResult = null;
+        filesListFetchPromise = null;
+      }
+      if (filesListCachedResult) {
+        result = filesListCachedResult;
+      } else {
+        if (!filesListFetchPromise) {
+          filesListFetchPromise = getFilesBySubmission({
+            case_processes_id: caseProcessesId,
+            case_id: caseId,
+            submission_page: "撤回专利",
+          });
+        }
+        result = await filesListFetchPromise;
+        filesListCachedResult = result;
+        filesListFetchPromise = null;
+      }
+
+      // 筛选special === 666的数据
+      if (result && result.success && result.files && Array.isArray(result.files)) {
+        const specialFiles = result.files.filter(
+          (file) => file.special === 666 || file.special === "666",
+        );
+
+        // 格式化并更新convertedFiles数据（兼容后端返回的 url 字段，可能包含引号/反引号）
+        convertedFiles.value = specialFiles.map((file, index) => ({
+          id: file.id || Date.now() + index,
+          name: file.fileName || "未知文件名",
+          category: file.fileCategoryMinor || "撤回专利申请声明",
+          title: file.fileName || "撤回",
+          desc: file.description || "",
+          uploader: file.uploader || "未知用户",
+          time: file.createTime || new Date().toISOString(),
+          fileType: file.fileName?.toLowerCase().endsWith(".pdf")
+            ? "pdf"
+            : file.fileName?.toLowerCase().endsWith(".zip")
+              ? "zip"
+              : "other",
+          // 优先取后端的 url，其次 fileUrl；字符串做一次清理
+          url: typeof file.url === "string" ? file.url : file.fileUrl || "",
+          rawFile: file,
+        }));
+
+        console.log("筛选后的special为666的文件列表:", convertedFiles.value);
+        ElMessage.success(`成功加载 ${convertedFiles.value.length} 个已转档文件`);
+        hasLoadedSpecialOnce.value = true;
+      } else {
+        ElMessage.warning("未获取到文件列表数据");
+        convertedFiles.value = [];
+      }
+    } catch (error) {
+      console.error("加载special文件失败:", error);
+      ElMessage.error("加载文件列表失败，请重试");
+      convertedFiles.value = [];
+    } finally {
+      if (!force) {
+        loadSpecialFilesInFlight = null;
+      }
+    }
+  };
+
+  if (force) {
+    return runner();
+  }
+
+  loadSpecialFilesInFlight = runner();
+  return loadSpecialFilesInFlight;
 };
 
 // 解析URL参数
@@ -1495,7 +1532,6 @@ const mapDataToForm = (data: any) => {
 
         // 数据映射完成后查询文件列表
         console.log("🔍 数据映射完成后，开始查询文件列表...");
-        queryFiles(); // 直接调用，不使用await，因为mapDataToForm不是async函数
       } else {
         console.log("附件文件数组为空");
         fileList.value = [];

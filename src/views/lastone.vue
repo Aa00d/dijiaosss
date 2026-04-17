@@ -2263,7 +2263,7 @@ const handlePendingFileSelect = async (event: Event) => {
       formdata.append("internal_code", internalCode);
 
       console.log("🔧 实际请求信息:");
-      console.log("  - URL: http://bf7a9b3d.natappfree.cc/api/files/upload-with-code");
+      console.log("  - URL: http://t6ce5869.natappfree.cc/api/files/upload-with-code");
       console.log("  - Method: POST");
       console.log("  - Body: FormData");
       console.log("  - FormData内容:");
@@ -2292,7 +2292,7 @@ const handlePendingFileSelect = async (event: Event) => {
       const startTime = Date.now();
 
       const response = await fetch(
-        "http://bf7a9b3d.natappfree.cc/api/files/upload-with-code",
+        "http://t6ce5869.natappfree.cc/api/files/upload-with-code",
         requestOptions,
       );
 
@@ -2484,7 +2484,7 @@ const handleFileSelect = async (event: Event) => {
     formdata.append("internal_code", internalCode);
 
     console.log("🔧 实际请求信息:");
-    console.log("  - URL: http://bf7a9b3d.natappfree.cc/api/files/upload-with-code");
+    console.log("  - URL: http://t6ce5869.natappfree.cc/api/files/upload-with-code");
     console.log("  - Method: POST");
     console.log("  - Body: FormData");
     console.log("  - FormData内容:");
@@ -2511,7 +2511,7 @@ const handleFileSelect = async (event: Event) => {
     const startTime = Date.now();
 
     const response = await fetch(
-      "http://bf7a9b3d.natappfree.cc/api/files/upload-with-code",
+      "http://t6ce5869.natappfree.cc/api/files/upload-with-code",
       requestOptions,
     );
 
@@ -3513,7 +3513,7 @@ onMounted(async () => {
       <el-button type="primary" @click="returnForm">退回</el-button>
       <el-button type="primary" @click="transferForm">移交</el-button>
       <el-button type="primary" @click="deleteForm">删除</el-button>
-      <el-button type="primary" @click="openIdQueryModal">id查询</el-button>
+      <el-button type="primary" @click="openIdQueryModal" disabled>id查询</el-button>
     </div>
 
     <!-- 案件信息 -->

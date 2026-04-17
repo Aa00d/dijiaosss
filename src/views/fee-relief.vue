@@ -669,8 +669,8 @@ const processSteps = ref([
       <el-button type="primary">退回</el-button>
       <el-button type="primary">移交</el-button>
       <el-button type="primary">删除</el-button>
-      <el-button type="primary" @click="openAllQueryModal">查询所有</el-button>
-      <el-button type="primary" @click="openIdQueryModal">ID查询</el-button>
+      <el-button type="primary" @click="openAllQueryModal" disabled>查询所有</el-button>
+      <el-button type="primary" @click="openIdQueryModal" disabled>ID查询</el-button>
     </div>
 
     <!-- 新增：查询所有结果弹窗 -->

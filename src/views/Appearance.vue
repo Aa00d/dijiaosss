@@ -622,7 +622,7 @@ async function handleQuery() {
     showQueryModal.value = false;
 
     // 显示成功提示
-    ElMessage.success("查询成功，数据已显示在页面上");
+    //ElMessage.success("查询成功，数据已显示在页面上");
   } catch (error) {
     console.error("查询失败:", error);
     ElMessage.error("查询失败，请检查输入参数或网络连接");
@@ -961,7 +961,7 @@ const loadExcelData = async () => {
       isExcelLoaded.value = true;
       currentPage.value = 1;
       if (excelData.value.length > 0) {
-        ElMessage.success("产品字典数据加载成功，共" + excelData.value.length + "条记录");
+        // ElMessage.success("产品字典数据加载成功，共" + excelData.value.length + "条记录");
       } else {
         ElMessage.warning("产品字典已加载，但未解析到有效数据");
       }
@@ -2416,12 +2416,17 @@ const startXmlConversion = async () => {
 
     // 添加petitionSqlString参数 - 根据API要求构建
     const petitionSqlString = JSON.stringify({
-      caseId: currentCaseId.value || "",
+      caseId: currentCaseId.value || "case_id",
       processesId: currentCaseProcessesId.value || "",
       date: new Date().toISOString().split("T")[0],
     });
     uploadFormData.append("petitionSqlString", petitionSqlString);
     console.log("添加petitionSqlString参数:", petitionSqlString);
+
+    // 添加case_id参数
+    const caseId = currentCaseId.value || "";
+    uploadFormData.append("case_id", caseId);
+    console.log("添加case_id参数:", caseId);
 
     // 发送文件上传请求到指定的API地址
     const response = await fetch("http://47.108.144.113:9111/api/appearance/xml", {

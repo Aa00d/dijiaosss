@@ -170,10 +170,15 @@ const onSubmit = async () => {
       fileType: 1, // 文件类型，发明，实用，外观新申请为0，其他为1
     };
 
+    // 获取URL参数
+    const urlParams = getParamsFromUrl();
+    const caseId = urlParams.case_id || "";
+
     // 创建FormData
     const formData = new FormData();
     formData.append("essenceString", JSON.stringify(essenceString));
     formData.append("mysqlString", JSON.stringify(mysqlString));
+    formData.append("case_id", caseId);
 
     // 打印调试信息
     console.log("🔍 准备提交请求，参数：");
@@ -643,7 +648,7 @@ onMounted(async () => {
       <el-button type="primary">提交</el-button>
       <el-button type="primary" @click="onReturn">退回</el-button>
       <el-button type="primary" @click="onTransfer">移交</el-button>
-      <el-button type="primary" @click="openIdQueryDialog">id查询</el-button>
+      <el-button type="primary" @click="openIdQueryDialog" disabled>id查询</el-button>
       <el-button type="primary" @click="onDelete">删除</el-button>
     </div>
 
