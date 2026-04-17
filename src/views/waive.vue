@@ -1296,7 +1296,7 @@ const onDelete = async () => {
 // API调用函数（已删除查询所有功能）
 // const fetchAllAbandonPatentStatements = async (): Promise<ApiResponse> => {
 //   try {
-//     const response = await fetch('http://bf7a9b3d.natappfree.cc/api/abandon-patent-statement/all', {
+//     const response = await fetch('http://t6ce5869.natappfree.cc/api/abandon-patent-statement/all', {
 //       method: 'GET',
 //       headers: {
 //         'Content-Type': 'application/json',
@@ -2262,7 +2262,7 @@ const uploadZipBytes = async (arrayBuffer: ArrayBuffer) => {
       console.error(
         '  1. 控制台是否有"🔄 代理请求"日志？如果没有，说明代理没有工作，需要重启开发服务器',
       );
-      console.error("  2. 后端服务器 http://bf7a9b3d.natappfree.cc 是否正常运行？");
+      console.error("  2. 后端服务器 http://t6ce5869.natappfree.cc 是否正常运行？");
       console.error("  3. 网络连接是否正常？");
     } else if (err?.response?.status === 404) {
       errorType = "404错误";
