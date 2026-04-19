@@ -839,7 +839,7 @@ const submitRevocationXml = async () => {
 
     const disposition =
       resp.headers?.["content-disposition"] || resp.headers?.["Content-Disposition"] || "";
-    let filename = "恢复权利请求.zip";
+    let filename = "撤回声明请求.zip";
     const matchRFC = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
     const matchQuoted = /filename=\"?([^\";]+)\"?/i.exec(disposition);
     if (matchRFC && matchRFC[1]) {
@@ -867,7 +867,7 @@ const submitRevocationXml = async () => {
         arrayBuffer: buffer,
         caseProcessesId: currentCaseProcessesId.value,
         caseId: currentCaseId.value,
-        submissionPage: "恢复权力",
+        submissionPage: "撤回权力",
         uploadUrl: `${import.meta.env.VITE_API_BASE_URL}/files/upload-by-bytes`,
         timeout: 120000,
       });
