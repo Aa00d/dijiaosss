@@ -64,10 +64,16 @@ export const uploadFileWithInternalCode = async (params) => {
     const data = await response.json();
     console.log("文件上传成功:", data);
 
+    // 提取 base_url 和 url 字段
+    const baseUrl = data.base_url || data.baseUrl || data.baseurl || "";
+    const signedUrl = data.url || data.signedUrl || data.signed_url || "";
+
     // 返回上传结果
     return {
       success: true,
       data: data,
+      base_url: baseUrl,
+      url: signedUrl,
     };
   } catch (error) {
     console.error("文件上传失败:", error);

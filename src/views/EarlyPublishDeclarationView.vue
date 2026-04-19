@@ -1287,60 +1287,52 @@ const executeSubmit = async () => {
     ].join(" ");
     console.log("🐚 cURL", curl);
 
-    const response = await fetch(fullUrl, {
-      method: "POST",
-      body: form,
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("❌ 服务端返回错误:", text);
-      throw new Error(`HTTP错误：${response.status}`);
-    }
-
-    // XML生成接口使用不同的服务器
-    const xmlUrl = "http://47.108.144.113:9111/api/word/extractPublish/xml";
-    const xmlRes = await fetch(xmlUrl, { method: "POST", body: form });
+    // 直接调用XML生成接口
+    const xmlRes = await fetch(fullUrl, { method: "POST", body: form });
     if (!xmlRes.ok) {
       const txt = await xmlRes.text();
       throw new Error(`提交失败: ${xmlRes.status} ${txt}`);
     }
-    // 先读取blob数据，因为Response流只能读取一次
+
+    // 从xmlRes获取zip文件（修复：使用xmlRes而不是response）
     const xmlBlob = await xmlRes.blob();
-    // 从blob创建ArrayBuffer
-    const buffer = await xmlBlob.arrayBuffer();
-
-    // 创建一个新的Response对象传递给downloadResponseFile
-    // 这样可以避免流已经被读取的错误
-    const newRes = new Response(xmlBlob, {
-      headers: xmlRes.headers,
-      status: xmlRes.status,
-      statusText: xmlRes.statusText,
-    });
-
-    const blob = await response.blob();
-    const type = response.headers.get("content-type") || "";
-    const contentDisposition = response.headers.get("content-disposition") || "";
+    const xmlContentType = xmlRes.headers.get("content-type") || "";
+    const xmlContentDisposition = xmlRes.headers.get("content-disposition") || "";
 
     // 尝试从content-disposition头获取文件名
-    let filename = "提前公布声明_结果.zip";
-    const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+    let zipFilename = "提前公布声明_结果.zip";
+    const filenameMatch = xmlContentDisposition.match(/filename="([^"]+)"/);
     if (filenameMatch && filenameMatch[1]) {
-      filename = filenameMatch[1];
+      zipFilename = filenameMatch[1];
     }
 
     // 检查响应类型并记录日志
     if (
-      type.includes("application/zip") ||
-      blob.type.includes("application/zip") ||
-      filename.endsWith(".zip")
+      xmlContentType.includes("application/zip") ||
+      xmlBlob.type.includes("application/zip") ||
+      zipFilename.endsWith(".zip")
     ) {
-      console.log("✅ 检测到zip文件:", filename);
+      console.log("✅ 检测到zip文件:", zipFilename);
+
+      // 使用xmlRes的blob创建下载链接
+      const xmlBlobForDownload = xmlBlob.slice(0, xmlBlob.size, "application/zip");
+      const xmlBlobUrl = URL.createObjectURL(xmlBlobForDownload);
+
+      // 创建下载链接
+      const a = document.createElement("a");
+      a.href = xmlBlobUrl;
+      a.download = zipFilename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(xmlBlobUrl);
+
+      console.log("✅ ZIP文件下载已触发:", zipFilename);
 
       // 提交成功后调用useUploadZipBytes上传二进制流
       try {
         // 将blob转换为ArrayBuffer
-        const arrayBuffer = await blob.arrayBuffer();
+        const arrayBuffer = await xmlBlob.arrayBuffer();
         console.log("📤 准备上传二进制流到数据库...");
 
         // 获取case_processes_id和case_id（如果有），否则使用默认值
@@ -1370,7 +1362,7 @@ const executeSubmit = async () => {
     } else {
       console.log("⚠️ 非zip响应");
       try {
-        const text = await blob.text();
+        const text = await xmlBlob.text();
         console.log("📝 响应内容:", text);
       } catch (textError) {
         console.error("❌ 解析非zip响应失败:", textError);
@@ -1442,9 +1434,103 @@ const loadProcessedFiles = async () => {
 };
 
 // 文件操作
-const downloadFile = (file: any) => {
-  console.log("下载文件:", file);
-  // 实现文件下载逻辑
+const downloadFile = async (file: any) => {
+  console.log("📥 下载文件:", file);
+
+  if (!file) {
+    ElMessage.warning("文件对象不存在");
+    return;
+  }
+
+  // 获取文件名（支持多种字段名）
+  const fileName = file.attachmentName || file.fileName || "download";
+
+  // 获取文件URL（支持多种字段名）
+  let fileUrl = file.fileUrl || file.fileBaseUrl || file.url || "";
+
+  // 如果URL是相对路径，构建完整的下载URL
+  if (fileUrl && !fileUrl.includes("://")) {
+    if (fileUrl.startsWith("cases/")) {
+      fileUrl = `${API_BASE_URL}/files/download?path=${encodeURIComponent(fileUrl)}`;
+    } else if (!fileUrl.startsWith("/")) {
+      fileUrl = `${API_BASE_URL}/${fileUrl}`;
+    } else {
+      fileUrl = `${API_BASE_URL}${fileUrl}`;
+    }
+  }
+
+  // 如果还是没有URL，尝试从原始数据中获取
+  if (!fileUrl && file.fileId) {
+    console.warn("文件URL不存在，无法下载:", file);
+    ElMessage.warning("文件URL不存在，无法下载");
+    return;
+  }
+
+  if (!fileUrl) {
+    ElMessage.warning("文件URL不存在，无法下载");
+    return;
+  }
+
+  try {
+    console.log("📥 开始下载文件:", { fileName, fileUrl });
+
+    // 如果是完整的URL（OSS等外部URL），直接使用 <a> 标签下载
+    if (fileUrl.includes("://")) {
+      const a = document.createElement("a");
+      a.href = fileUrl;
+      a.download = fileName;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      ElMessage.success("文件下载已开始");
+      console.log("✅ 文件下载链接已触发:", fileName);
+      return;
+    }
+
+    // 对于相对路径或API路径，使用fetch下载
+    const response = await fetch(fileUrl, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: "下载失败" }));
+      console.error("❌ 文件下载失败:", errorData);
+      ElMessage.error(errorData.message || "文件下载失败");
+      return;
+    }
+
+    // 获取文件blob
+    const blob = await response.blob();
+
+    // 从响应头获取文件名，或使用提供的文件名
+    const disposition = response.headers.get("content-disposition") || "";
+    let downloadFileName = fileName;
+    const filenameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+    if (filenameMatch && filenameMatch[1]) {
+      downloadFileName = decodeURIComponent(filenameMatch[1].replace(/['"]/g, ""));
+    }
+
+    // 创建下载链接并直接下载
+    const downloadLink = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = downloadLink;
+    a.download = downloadFileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(downloadLink);
+
+    ElMessage.success("文件下载成功");
+    console.log("✅ 文件下载成功:", downloadFileName);
+  } catch (error: any) {
+    console.error("❌ 文件下载出错:", error);
+    ElMessage.error(`文件下载失败: ${error.message || "未知错误"}`);
+  }
 };
 
 const viewFile = async (file: any) => {

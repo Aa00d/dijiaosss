@@ -908,6 +908,7 @@ import {
 } from "../js/InternalCode.js";
 import { deleteFileById } from "../js/useFileDelete.js";
 import { useUploadZipBytes } from "../js/useUploadZipBytes.js";
+import { CONVERT_API_BASE_URL } from "../js/convertApiBase.js";
 import PdfViewer from "../components/PdfViewer.vue";
 import { usePdfViewer } from "../js/usePdfViewer.js";
 import { getCaseInfo as getCaseInfoApi } from "../js/useCaseSummary.js";
@@ -3525,9 +3526,17 @@ async function submitNewApplication() {
       return;
     }
 
-    const apiUrl = "http://47.108.144.113:9111/api/word/functional/xml";
+    const urlParams = getUrlParams();
+    const caseId = urlParams.caseId;
+    if (!caseId) {
+      ElMessage.error("缺少 case_id 参数，请检查地址栏");
+      return;
+    }
+
+    const apiUrl = `${CONVERT_API_BASE_URL}/word/functional/xml`;
 
     const fd = new FormData();
+    fd.append("case_id", caseId);
     // 注意：主文件不再使用file字段，file字段只用于待转档文件的URL
     // 如果需要主文件，可能需要使用其他字段名，请根据后端接口文档调整
 
@@ -3728,91 +3737,82 @@ async function submitNewApplication() {
       contentType.includes("application/x-zip-compressed") ||
       contentType.includes("octet-stream")
     ) {
-      // ZIP文件响应 - 直接上传到数据库
       const blob = resp.data;
+      const disposition = resp.headers["content-disposition"] || resp.headers["Content-Disposition"] || "";
 
-      // 将blob转换为ArrayBuffer，直接上传到数据库
-      const arrayBuffer = await blob.arrayBuffer();
-
-      // 上传zip二进制流到数据库
-      try {
-        const uploadResult = await uploadZipBytes(arrayBuffer);
-        console.log("✅ 二进制流已上传到数据库，大小:", blob.size, "字节");
-        console.log("✅ 上传返回结果:", uploadResult);
-
-        // 检查上传返回结果中是否包含URL
-        // 后端返回的URL可能是ZIP文件的下载URL，需要保存到已转档文件列表中
-        const zipFileUrl =
-          (uploadResult as any)?.url ||
-          (uploadResult as any)?.fileUrl ||
-          (uploadResult as any)?.data?.url ||
-          (uploadResult as any)?.downloadUrl ||
-          (uploadResult as any)?.download_url;
-
-        if (zipFileUrl) {
-          console.log("✅ ZIP文件URL已获取:", zipFileUrl);
-
-          // 将ZIP文件的URL添加到已转档文件列表中
-          // 注意：这个URL是ZIP文件本身的下载URL
-          const zipFileItem: ProcessedFileItem = {
-            serialNumber: processedFiles.value.length + 1,
-            attachmentName: "转档文件包.zip",
-            fileSubcategory: "压缩文件",
-            fileName: "转档文件包.zip",
-            fileAbbreviation: "ZIP",
-            uploadPerson: "",
-            uploadTime: new Date().toLocaleString("zh-CN"),
-          };
-
-          // 保存文件URL，用于下载
-          (zipFileItem as any).fileUrl = zipFileUrl;
-          (zipFileItem as any).fileBaseUrl = zipFileUrl;
-
-          // 添加到已转档文件列表的开头
-          processedFiles.value.unshift(zipFileItem);
-          console.log("📦 ZIP文件URL已添加到已转档文件列表");
-        }
-
-        // 上传成功后，从接口查询已转档文件列表（special为666的文件）
-        // 等待更长时间确保文件已保存到数据库，并添加重试机制
-        const refreshProcessedFilesWithRetry = async (retries = 3, delay = 2000) => {
-          for (let i = 0; i < retries; i++) {
-            await new Promise((resolve) => setTimeout(resolve, delay * (i + 1)));
-            await refreshProcessedFiles();
-            // 如果查询到文件了，可以提前结束
-            if (processedFiles.value.length > 0) {
-              console.log(`✅ 已转档文件查询成功，共 ${processedFiles.value.length} 个文件`);
-              break;
-            }
-          }
-        };
-        refreshProcessedFilesWithRetry();
-      } catch (uploadErr) {
-        // 上传失败则抛出错误
-        console.error("上传zip文件到数据库失败:", uploadErr);
-        throw uploadErr;
+      let downloadFileName = "实用新型转档结果.zip";
+      const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+      const normalMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
+      if (utf8Match?.[1]) {
+        downloadFileName = decodeURIComponent(utf8Match[1]);
+      } else if (normalMatch?.[1]) {
+        downloadFileName = decodeURIComponent(normalMatch[1].replace(/['"]/g, ""));
       }
+
+      const downloadBlob = new Blob([blob], { type: contentType || "application/zip" });
+      const downloadUrl = URL.createObjectURL(downloadBlob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = downloadFileName;
+      link.style.display = "none";
+      document.body.appendChild(link);
+
+      const clickEvent = new MouseEvent("click", {
+        view: window,
+        bubbles: true,
+        cancelable: true,
+      });
+      link.dispatchEvent(clickEvent);
+
+      setTimeout(() => {
+        try {
+          window.open(downloadUrl, "_blank", "noopener,noreferrer");
+        } catch (openErr) {
+          console.warn("window.open 下载兜底失败:", openErr);
+        }
+      }, 300);
+
+      setTimeout(() => {
+        try {
+          document.body.removeChild(link);
+        } catch {
+          // ignore
+        }
+        URL.revokeObjectURL(downloadUrl);
+      }, 5000);
+
+      console.log("✅ ZIP文件已开始下载:", downloadFileName, "大小:", blob.size, "字节");
+      ElMessage.success(`ZIP 已开始下载：${downloadFileName}`);
     } else {
-      // 其他类型的响应，尝试作为zip处理（某些服务器可能不设置正确的content-type）
       try {
         const blob = resp.data;
-        // 检查是否是zip文件（zip文件的前4个字节是PK\x03\x04）
         const buffer = await blob.slice(0, 4).arrayBuffer();
         const header = new Uint8Array(buffer);
         if (header[0] === 0x50 && header[1] === 0x4b && header[2] === 0x03 && header[3] === 0x04) {
-          // 检测到zip文件，直接上传到数据库
-          // 将blob转换为ArrayBuffer，直接上传到数据库
-          const arrayBuffer = await blob.arrayBuffer();
+          const disposition = resp.headers["content-disposition"] || resp.headers["Content-Disposition"] || "";
 
-          // 上传zip二进制流到数据库
-          try {
-            await uploadZipBytes(arrayBuffer);
-            console.log("✅ 二进制流已上传到数据库（通过文件头检测），大小:", blob.size, "字节");
-          } catch (uploadErr) {
-            // 上传失败则抛出错误
-            console.error("上传zip文件到数据库失败:", uploadErr);
-            throw uploadErr;
+          let downloadFileName = "实用新型转档结果.zip";
+          const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+          const normalMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
+          if (utf8Match?.[1]) {
+            downloadFileName = decodeURIComponent(utf8Match[1]);
+          } else if (normalMatch?.[1]) {
+            downloadFileName = decodeURIComponent(normalMatch[1].replace(/['"]/g, ""));
           }
+
+          const downloadBlob = new Blob([blob], { type: "application/zip" });
+          const downloadUrl = URL.createObjectURL(downloadBlob);
+          const link = document.createElement("a");
+          link.href = downloadUrl;
+          link.download = downloadFileName;
+          link.style.display = "none";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(downloadUrl);
+
+          console.log("✅ ZIP文件已开始下载（通过文件头检测）:", downloadFileName);
+          ElMessage.success(`ZIP 已开始下载：${downloadFileName}`);
         } else {
           ElMessage.success("提交成功");
           console.log("提交响应类型:", contentType);

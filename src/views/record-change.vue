@@ -4624,6 +4624,17 @@ const submitAlterationXmlCorrections = async () => {
           ElMessage.success(message);
         }
 
+        // 上传成功后，下载ZIP文件
+        console.log("📥 开始下载ZIP文件...");
+        const downloadFileName = `alteration-${Date.now()}.zip`;
+        const downloadLink = document.createElement("a");
+        downloadLink.href = URL.createObjectURL(blob);
+        downloadLink.download = downloadFileName;
+        downloadLink.click();
+        URL.revokeObjectURL(downloadLink.href);
+        ElMessage.success(`ZIP文件已下载: ${downloadFileName}`);
+        console.log("✅ ZIP文件下载完成");
+
         // 上传成功后，重新获取文件列表
         const refreshCaseProcessesId = currentCaseProcessesId.value;
         const refreshCaseId = currentCaseId.value;
@@ -4678,7 +4689,7 @@ const submitAlterationXmlCorrections = async () => {
           );
         }
       }
-    } catch (uploadError: any) {
+      } catch (uploadError: any) {
       console.error("❌ 上传ZIP二进制流失败:", uploadError);
       ElMessage.error(`上传ZIP二进制流失败: ${uploadError.message || "未知错误"}`);
       // 即使上传失败，也提供下载选项
