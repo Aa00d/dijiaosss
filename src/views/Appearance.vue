@@ -1334,17 +1334,7 @@ const previewFileUrl = ref("");
 let currentPreviewBlobUrl: string | null = null;
 
 const processedFileChecked = ref(true);
-const processedFileTableData = ref([
-  {
-    index: 1,
-    fileName: "100001.pdf",
-    fileType: "专利转档交局",
-    fileTitle: "权利要求书",
-    fileShortName: "新五书",
-    uploader: "",
-    uploadTime: "",
-  },
-]);
+const processedFileTableData = ref([]);
 // 专用数组存储special为666的文件
 const special666FileTableData = ref([]);
 // 文件预览相关
@@ -2469,6 +2459,11 @@ const startXmlConversion = async () => {
             uploadUrl: `${import.meta.env.VITE_API_BASE_URL}/files/upload-by-bytes`,
           });
           ElMessage.success("文件已成功上传到数据库");
+
+          // 上传成功后刷新专利转档文件列表
+          setTimeout(() => {
+            queryFiles();
+          }, 1000);
         } catch (uploadError) {
           console.error("上传zip二进制流失败:", uploadError);
           ElMessage.error("文件上传到数据库失败，请重试");

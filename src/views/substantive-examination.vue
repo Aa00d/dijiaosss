@@ -231,6 +231,9 @@ const onSubmit = async () => {
         submissionPage: "实质审查请求",
       });
 
+      // 上传成功后刷新已转档文件列表
+      await loadProcessedFiles();
+
       ElMessage.success("提交成功，文件已上传");
     } else {
       // 尝试获取错误信息
