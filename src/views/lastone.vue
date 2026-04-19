@@ -240,21 +240,7 @@ const deleteFileItem = async (file: any, index: number) => {
       return;
     }
 
-    console.log("=== 删除文件API调试信息 ===");
-    console.log("📋 接口文档要求:");
-    console.log("  - 路径: DELETE /api/files/{id}");
-    console.log("  - 请求参数: id (文件ID)");
-    console.log("  - 返回格式: { success: boolean, message: string }");
-    console.log("");
-
     const url = `${API_BASE_URL}/files/${fileId}`;
-
-    console.log("🔧 实际请求信息:");
-    console.log("  - URL:", url);
-    console.log("  - Method: DELETE");
-    console.log("  - File ID:", fileId);
-    console.log("  - File Name:", file.fileName || file.file_name || "未知");
-    console.log("");
 
     ElMessage.info(`正在删除文件: ${file.fileName || file.file_name || "未知"}...`);
 
@@ -266,13 +252,6 @@ const deleteFileItem = async (file: any, index: number) => {
 
     const endTime = Date.now();
     const duration = endTime - startTime;
-
-    console.log("📡 删除文件API响应信息:");
-    console.log("  - Status:", response.status);
-    console.log("  - StatusText:", response.statusText);
-    console.log("  - OK:", response.ok);
-    console.log("  - Duration:", `${duration}ms`);
-    console.log("");
 
     if (!response.ok) {
       console.error("❌ 删除失败:");
@@ -306,18 +285,7 @@ const deleteFileItem = async (file: any, index: number) => {
     try {
       resultJson = JSON.parse(resultText);
     } catch (parseError) {
-      console.warn("  - 响应不是JSON格式，返回原始文本");
     }
-
-    console.log("✅ 删除文件API响应数据:");
-    console.log("  - Response Text:", resultText);
-    if (resultJson) {
-      console.log("  - Response JSON:", JSON.stringify(resultJson, null, 2));
-      console.log("  - Success:", resultJson.success);
-      console.log("  - Message:", resultJson.message);
-    }
-    console.log("=== 删除文件API调试信息结束 ===");
-    console.log("");
 
     // 检查删除是否成功
     if (resultJson && resultJson.success !== false) {
@@ -344,12 +312,6 @@ const deleteFileItem = async (file: any, index: number) => {
       fileList.value.splice(index, 1);
     }
   } catch (error: any) {
-    console.error("❌ 删除文件失败:");
-    console.error("  - File:", file);
-    console.error("  - Error:", error);
-    console.error("  - Error Message:", error.message || "未知错误");
-    console.log("");
-
     ElMessage.error(`删除失败: ${error.message || "未知错误"}`);
   }
 };
@@ -358,9 +320,6 @@ const saveForm = async () => {
   try {
     // 显示加载状态
     isLoading.value = true;
-
-    console.log("📝 开始保存意见陈述数据...");
-
     // 优先从URL获取ID参数，如果没有则使用内部保存的值
     const { caseProcessesId: urlCaseProcessesId, caseId: urlCaseId } = getIdsFromUrl();
 
@@ -392,17 +351,6 @@ const saveForm = async () => {
     // 更新当前保存的值
     currentCaseProcessesId.value = finalCaseProcessesId;
     currentCaseId.value = finalCaseId;
-
-    console.log("✅ 使用ID参数进行保存:", {
-      caseProcessesId: finalCaseProcessesId,
-      caseId: finalCaseId,
-      source:
-        urlCaseProcessesId && urlCaseId
-          ? "URL参数"
-          : currentCaseProcessesId.value && currentCaseId.value
-            ? "内部保存的值"
-            : "默认值",
-    });
 
     // 构建保存数据 - 根据接口文档格式
     // 根据 requestType 正确设置相关布尔字段
@@ -509,35 +457,6 @@ const saveForm = async () => {
       url += `?case_processes_id=${finalCaseProcessesId}&case_id=${finalCaseId}&submission_page=意见陈述`;
     }
 
-    console.log("=== 保存意见陈述API调试信息 ===");
-    console.log("📋 接口文档要求:");
-    console.log("  - 路径: POST /api/opinion-statement/save");
-    console.log("  - 必须参数: case_processes_id, case_id, submission_page");
-    console.log("  - 接收格式: application/json");
-    console.log("  - 返回格式: { success: boolean, message: string, data: object|null }");
-    console.log("  - 功能: 新建或部分更新意见陈述页面临时数据");
-    console.log("  - 行为: 按组合键 upsert (相同则更新，未找到则新增)");
-    console.log(
-      "  - 成功后: 在 case_process_submissions 表记录 (case_processes_id, case_id, submission_page)",
-    );
-    console.log("");
-    console.log("🔧 实际请求信息:");
-    console.log("  - URL:", url);
-    console.log("  - Method: POST");
-    console.log("  - Headers:", { "Content-Type": "application/json" });
-    console.log("  - Query参数:", {
-      case_processes_id: finalCaseProcessesId,
-      case_id: finalCaseId,
-      submission_page: "意见陈述",
-    });
-    console.log(
-      "  - 完整URL验证:",
-      url.includes("submission_page=意见陈述")
-        ? "✅ 包含submission_page参数"
-        : "❌ 缺少submission_page参数",
-    );
-    console.log("  - Request Body:", JSON.stringify(saveData, null, 2));
-    console.log("");
 
     // 发送保存请求
     const response = await fetch(url, {
@@ -549,19 +468,7 @@ const saveForm = async () => {
       body: JSON.stringify(saveData),
     });
 
-    console.log("📡 保存API响应信息:");
-    console.log("  - Status:", response.status);
-    console.log("  - StatusText:", response.statusText);
-    console.log("  - OK:", response.ok);
-    console.log("");
-
     if (!response.ok) {
-      console.error("❌ 保存API请求失败:");
-      console.error("  - Status:", response.status);
-      console.error("  - StatusText:", response.statusText);
-      console.error("  - URL:", url);
-      console.error("  - Method: POST");
-      console.error("  - Headers:", response.headers);
 
       // 尝试获取错误响应内容
       try {
@@ -594,20 +501,11 @@ const saveForm = async () => {
 
     const result = await response.json();
 
-    console.log("✅ 保存API响应数据:");
-    console.log("  - Success:", result.success);
-    console.log("  - Message:", result.message);
-    console.log("  - Data:", result.data);
-    console.log("  - Response Data:", JSON.stringify(result, null, 2));
-    console.log("=== 保存API调试信息结束 ===");
-    console.log("");
-
     // 根据接口返回的 success 字段判断是否成功
     if (result.success) {
       // 保存成功后，更新当前记录ID
       if (result.data && result.data.id) {
         currentRecordId.value = result.data.id;
-        console.log("✅ 更新当前记录ID:", currentRecordId.value);
       }
       ElMessage.success(result.message || "保存成功");
 
@@ -615,7 +513,6 @@ const saveForm = async () => {
       setTimeout(async () => {
         try {
           if (finalCaseProcessesId && finalCaseId) {
-            console.log("🔄 保存成功后自动刷新数据...");
             const jsonData = await fetchOpinionStatementUnifiedByCase(
               finalCaseProcessesId,
               finalCaseId,
@@ -753,8 +650,6 @@ const saveForm = async () => {
               } else {
                 formData.requestType = "";
               }
-
-              console.log("✅ 保存成功后数据刷新完成");
             }
           }
         } catch (error) {
@@ -762,14 +657,12 @@ const saveForm = async () => {
         }
       }, 500);
     } else {
-      console.log("❌ 保存失败:", result.message);
       ElMessage.error(result.message || "保存失败");
     }
   } catch (error: any) {
     console.error("❌ 保存意见陈述失败:");
     console.error("  - Error:", error);
     console.error("  - Error Message:", error.message || "未知错误");
-    console.log("");
 
     ElMessage.error(`保存失败: ${error.message || "未知错误"}`);
   } finally {
@@ -840,13 +733,6 @@ const getIdsFromUrl = () => {
     }
   }
 
-  console.log("从URL获取ID参数:", {
-    case_processes_id: caseProcessesId,
-    case_id: caseId,
-    query: route.query,
-    state: history.state?.state,
-  });
-
   return { caseProcessesId, caseId };
 };
 
@@ -871,17 +757,6 @@ const ensureQueryParams = async () => {
   // 如果URL和query都没有参数，说明是原本的路由
   const isOriginalRoute = !urlHasQueryParams && !queryHasParams;
 
-  console.log("🔍 检查路由状态:", {
-    path: route.path,
-    currentUrl: currentUrl,
-    urlHasQueryParams: urlHasQueryParams,
-    queryHasCaseProcessesId: queryHasCaseProcessesId,
-    queryHasCaseId: queryHasCaseId,
-    queryHasParams: queryHasParams,
-    isOriginalRoute: isOriginalRoute,
-    currentQuery: route.query,
-  });
-
   // 如果是原本的路由（没有查询参数），直接报错
   if (isOriginalRoute) {
     const errorMessage = "URL中缺少必需的查询参数 case_processes_id 和 case_id，请检查URL格式";
@@ -894,8 +769,6 @@ const ensureQueryParams = async () => {
     throw new Error(errorMessage);
   }
 
-  // 如果已经有参数，返回当前的查询参数
-  console.log("✅ 路由已有查询参数:", route.query);
   return route.query as Record<string, string>;
 };
 
@@ -904,32 +777,12 @@ const fetchOpinionStatementUnifiedByCase = async (caseProcessesId: number, caseI
   try {
     const url = `${API_BASE_URL}/opinion-statement/by-case?case_processes_id=${caseProcessesId}&case_id=${caseId}`;
 
-    console.log("=== 查询意见陈述（关于费用）API调试信息 ===");
-    console.log("📋 接口文档要求:");
-    console.log("  - 路径: GET /api/opinion-statement/by-case");
-    console.log("  - 必须参数: case_processes_id, case_id");
-    console.log("  - 功能: 按组合键查询意见陈述（关于费用）数据");
-    console.log("  - 返回格式: { list: array, success: boolean }");
-    console.log("");
-    console.log("🔧 实际请求信息:");
-    console.log("  - URL:", url);
-    console.log("  - Method: GET");
-    console.log("  - Headers:", { "Content-Type": "application/json" });
-    console.log("  - Query参数:", { case_processes_id: caseProcessesId, case_id: caseId });
-    console.log("");
-
     const response = await fetch(url, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
       },
     });
-
-    console.log("📡 查询API响应信息:");
-    console.log("  - Status:", response.status);
-    console.log("  - StatusText:", response.statusText);
-    console.log("  - OK:", response.ok);
-    console.log("");
 
     if (!response.ok) {
       // 尝试读取错误响应内容，帮助诊断问题
@@ -952,14 +805,6 @@ const fetchOpinionStatementUnifiedByCase = async (caseProcessesId: number, caseI
 
     const data = await response.json();
 
-    console.log("✅ 查询API响应数据:");
-    console.log("  - Success:", data.success);
-    console.log("  - Message:", data.message);
-    console.log("  - Data:", data.data);
-    console.log("  - List:", data.list);
-    console.log("  - Response Data:", JSON.stringify(data, null, 2));
-    console.log("=== 查询API调试信息结束 ===");
-
     return data;
   } catch (error) {
     console.error("❌ 组合键查询API调用失败:", error);
@@ -970,7 +815,6 @@ const fetchOpinionStatementUnifiedByCase = async (caseProcessesId: number, caseI
 };
 
 const submitForm = async () => {
-  console.log("🔄 submitForm函数被调用");
   try {
     // 构建ExpenseString参数
     const bills = [];
@@ -1028,49 +872,42 @@ const submitForm = async () => {
     // 构建docx参数（字符串）
     const docx = formData.opinionContent || "";
 
-    // 创建FormData对象
-    const formDataToSend = new FormData();
+    // 优先从URL获取ID参数，如果没有则使用内部保存的值或默认值
+    const { caseProcessesId: urlCaseProcessesId, caseId: urlCaseId } = getIdsFromUrl();
 
-    // 从fileList中获取已上传文件的URL，构建fileNameDtos数组
-    // fileList中的文件是从附件上传后后端返回的，包含URL
-    // 根据Java后端FileNameDta类结构要求：
-    // public class FileNameDta {
-    //   MultipartFile file;
-    //   String name;
-    // }
-    // 使用FormData数组格式传递多个文件（Spring Boot原生支持）
-    fileList.value.forEach((fileItem, index) => {
-      if (fileItem.url) {
-        // 使用数组格式：fileNameDtos[0].file, fileNameDtos[0].name, fileNameDtos[1].file, fileNameDtos[1].name...
-        formDataToSend.append(`fileNameDtos[${index}].file`, fileItem.url);
-        formDataToSend.append(`fileNameDtos[${index}].name`, fileItem.fileType || "");
-      }
-    });
+    // 使用URL参数、内部保存的值或默认值
+    const caseProcessesId = urlCaseProcessesId || currentCaseProcessesId.value || parseInt(DEFAULT_CASE_PROCESSES_ID);
+    const caseId = urlCaseId || currentCaseId.value || parseInt(DEFAULT_CASE_ID);
 
-    if (fileList.value.filter((item) => item.url).length > 0) {
-      console.log(
-        "✅ 添加fileNameDtos数组，文件数量:",
-        fileList.value.filter((item) => item.url).length,
-      );
-      console.log("  - 使用FormData数组格式传递");
-    }
+    // 构建JSON数据结构 - 符合指定格式
+    const requestData = {
+      // 从fileList中获取已上传文件的URL，构建fileNameDtos数组
+      fileNameDtos: fileList.value
+        .filter(fileItem => fileItem.url)
+        .map(fileItem => ({
+          file: fileItem.url,
+          name: fileItem.fileType || ""
+        })),
+
+      // 添加其他参数
+      docx: docx,
+      case_id: caseId,
+      expenseString: JSON.stringify(expenseString)
+    };
 
     // 清空上传文件列表，避免重复提交
     uploadFiles.length = 0;
 
-    // 添加其他参数
-    formDataToSend.append("ExpenseString", JSON.stringify(expenseString));
-    formDataToSend.append("MysqlString", JSON.stringify(mysqlString));
-    formDataToSend.append("docx", docx);
-
     // 显示加载状态
     isLoading.value = true;
 
-    // 发送POST请求
+    // 发送POST请求 - 使用JSON格式
     const response = await fetch(`http://47.108.144.113:9111/api/word/expense/xml`, {
       method: "POST",
-      body: formDataToSend,
-      // 注意：发送FormData时不需要设置Content-Type
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(requestData),
       mode: "cors",
     });
 
@@ -1089,7 +926,6 @@ const submitForm = async () => {
         // 处理成功响应
         if (result.success) {
           ElMessage.success("提交成功");
-          console.log("✅ 提交成功");
 
           // 提交成功后弹出删除确认框
           setTimeout(() => {
@@ -1098,7 +934,6 @@ const submitForm = async () => {
 
           // 可以添加其他成功处理逻辑，如跳转页面等
         } else {
-          console.log("❌ 提交失败:", result.message);
           ElMessage.error(result.message || "提交失败");
         }
       } catch (jsonError) {
@@ -1112,23 +947,7 @@ const submitForm = async () => {
         const blob = await response.blob();
         const buffer = await blob.arrayBuffer();
 
-        console.log("✅ 成功获取ZIP压缩包:");
-        console.log("  - Blob大小:", `${blob.size} bytes (${(blob.size / 1024).toFixed(2)} KB)`);
-        console.log("  - Blob类型:", blob.type);
-        console.log("");
-
-        // 将 Blob 转换为 ArrayBuffer
-        console.log("🔄 开始转换Blob为ArrayBuffer...");
         const arrayBuffer = await blob.arrayBuffer();
-        console.log("✅ Blob转换完成:");
-        console.log(
-          "  - ArrayBuffer大小:",
-          `${arrayBuffer.byteLength} bytes (${(arrayBuffer.byteLength / 1024).toFixed(2)} KB)`,
-        );
-        console.log("");
-
-        // 上传ZIP二进制流到新接口
-        console.log("📤 开始上传ZIP二进制流到新接口...");
         try {
           const uploadResult = await uploadZipBytes(arrayBuffer);
 
@@ -1159,14 +978,6 @@ const submitForm = async () => {
                   duration: 8000,
                   showClose: true,
                 });
-                console.warn("📝 关于文件名限制的说明:");
-                console.warn("  ⚠️ 注意：这是后端接口的限制，不是前端限制");
-                console.warn("  - 后端接口会根据文件名解析内部代码，无法解析的文件会被跳过");
-                console.warn(
-                  "  - 建议后端改进：添加参数支持指定默认内部代码，或对无法解析的文件使用默认内部代码",
-                );
-                console.warn("  - 临时方案：修改ZIP文件内的文件名，使其包含可识别的文件类型标识");
-                console.warn("  - 请查看控制台获取详细的文件名格式建议和解决方案");
               } else {
                 ElMessage.warning(`有 ${skippedCount} 个文件被跳过，请查看控制台了解详情`);
               }
@@ -1181,12 +992,10 @@ const submitForm = async () => {
             if (refreshCaseProcessesId && refreshCaseId) {
               setTimeout(async () => {
                 try {
-                  console.log("🔄 上传成功后刷新文件列表...");
                   await fetchUploadedFilesList(
                     refreshCaseProcessesId.toString(),
                     refreshCaseId.toString(),
                   );
-                  console.log("✅ 文件列表已刷新，已转档文件列表已更新");
                 } catch (error) {
                   console.error("重新获取文件列表失败:", error);
                 }
@@ -1211,22 +1020,6 @@ const submitForm = async () => {
                   duration: 10000,
                   showClose: true,
                 });
-                console.error("❌ 所有文件都被跳过，原因：文件名格式不符合后端要求");
-                console.error("⚠️ 注意：这是后端接口的限制，不是前端限制");
-                console.error("📝 解决方案：");
-                console.error(
-                  "  1. 【推荐】后端改进：添加参数支持指定默认内部代码（如 `default_internal_code`）",
-                );
-                console.error(
-                  "  2. 【推荐】后端改进：对无法解析的文件使用默认内部代码，而不是跳过",
-                );
-                console.error("  3. 临时方案：修改ZIP文件内的文件名，使其包含可识别的文件类型标识");
-                console.error(
-                  '  4. 临时方案：使用标准文件类型名称（如 "权利要求书.pdf"、"说明书.pdf"）',
-                );
-                console.error(
-                  "  5. 前端方案：在上传前重命名ZIP内的文件（需要解压和重新打包，较复杂）",
-                );
               } else {
                 ElMessage.error(`上传失败：所有文件都被跳过，请查看控制台了解详情`);
               }
@@ -1237,7 +1030,6 @@ const submitForm = async () => {
             }
           }
         } catch (uploadError: any) {
-          console.error("❌ 上传ZIP二进制流失败:", uploadError);
           ElMessage.error(`上传ZIP二进制流失败: ${uploadError.message || "未知错误"}`);
           // 即使上传失败，也提供下载选项
           const fileName = `expense-${Date.now()}.zip`;
@@ -1293,12 +1085,6 @@ const executeIdQuery = async () => {
     // 保存当前组合键参数，用于后续保存和删除操作
     currentCaseProcessesId.value = caseProcessesId;
     currentCaseId.value = caseId;
-
-    // 保存查询参数用于内部逻辑（不更新URL）
-    console.log("✅ 查询参数已保存（仅内部使用，不更新URL）:", {
-      case_processes_id: caseProcessesId,
-      case_id: caseId,
-    });
 
     const data = jsonData.list[0];
 
@@ -1760,28 +1546,10 @@ const deleteOpinionStatementUnified = async () => {
 
     let url = `${API_BASE_URL}/opinion-statement/delete?${queryParams.toString()}`;
 
-    console.log("=== 删除意见陈述（关于费用）API调试信息 ===");
-    console.log("📋 接口文档要求:");
-    console.log("  - 路径: DELETE /api/opinion-statement/delete");
-    console.log("  - 必须参数: case_processes_id, case_id (查询参数)");
-    console.log("  - 返回格式: { success: boolean, message: string }");
-    console.log("");
-    console.log("🔧 实际请求信息:");
-    console.log("  - URL:", url);
-    console.log("  - Method: DELETE");
-    console.log("  - Query参数:", { case_processes_id: caseProcessesId, case_id: caseId });
-    console.log("");
-
     const response = await fetch(url, {
       method: "DELETE",
       credentials: "include",
     });
-
-    console.log("📡 删除API响应信息:");
-    console.log("  - Status:", response.status);
-    console.log("  - StatusText:", response.statusText);
-    console.log("  - OK:", response.ok);
-    console.log("");
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -1794,14 +1562,9 @@ const deleteOpinionStatementUnified = async () => {
     let result;
     if (contentType && contentType.includes("application/json")) {
       result = await response.json();
-      console.log("✅ 删除API响应数据:");
-      console.log("  - Response JSON:", JSON.stringify(result, null, 2));
-      console.log("  - Success:", result.success);
-      console.log("  - Message:", result.message);
-      console.log("=== 删除API调试信息结束 ===");
+
     } else {
       const text = await response.text();
-      console.log("📄 非JSON响应:", text);
       throw new Error("Unexpected response format");
     }
 
@@ -1873,47 +1636,9 @@ const uploadZipBytes = async (arrayBuffer: ArrayBuffer) => {
     currentCaseProcessesId.value = finalCaseProcessesId;
     currentCaseId.value = finalCaseId;
 
-    console.log("=== 上传ZIP二进制流API调试信息 ===");
-    console.log("📋 接口文档要求:");
-    console.log("  - 路径: POST /api/files/upload-by-bytes");
-    console.log(
-      "  - 用途: 接收 ZIP 二进制流，解包出 .pdf 与嵌套 .zip，按文件名解析内部代码，上传到 OSS，并落库 dj_files",
-    );
-    console.log("  - Content-Type: application/octet-stream");
-    console.log("  - Body: 原始 ZIP 二进制流（不是 multipart/form-data）");
-    console.log("  - 必须参数: case_processes_id, case_id, submission_page");
-    console.log(
-      "  - 返回格式: { success: boolean, uploaded_count: number, items: array, skipped: array }",
-    );
-    console.log("");
-    console.log("⚠️ 重要说明:");
-    console.log("  - 虽然使用二进制流传输，但后端仍会根据ZIP内的文件名解析内部代码");
-    console.log("  - 如果文件名无法解析内部代码，文件会被跳过（这是后端的设计限制）");
-    console.log(
-      "  - 建议后端改进：添加参数支持指定默认内部代码，或对无法解析的文件使用默认内部代码",
-    );
-    console.log("");
-
     // 上传接口使用与著录变更相同的服务器（直接使用完整URL，参考著录变更的成功案例）
     const uploadApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
     const url = `${uploadApiBaseUrl}/files/upload-by-bytes?case_processes_id=${finalCaseProcessesId}&case_id=${finalCaseId}&submission_page=${encodeURIComponent("意见陈述")}`;
-
-    console.log("🔧 实际请求信息:");
-    console.log("  - URL:", url);
-    console.log("  - Method: POST");
-    console.log("  - Headers:", { "Content-Type": "application/octet-stream" });
-    console.log("  - Query参数:", {
-      case_processes_id: finalCaseProcessesId,
-      case_id: finalCaseId,
-      submission_page: "意见陈述",
-    });
-    console.log("  - Body类型: ArrayBuffer");
-    console.log(
-      "  - Body大小:",
-      `${arrayBuffer.byteLength} bytes (${(arrayBuffer.byteLength / 1024).toFixed(2)} KB)`,
-    );
-    console.log("");
-
     ElMessage.info("正在上传ZIP二进制流...");
 
     const startTime = Date.now();
@@ -1928,26 +1653,14 @@ const uploadZipBytes = async (arrayBuffer: ArrayBuffer) => {
     const endTime = Date.now();
     const duration = endTime - startTime;
 
-    console.log("📡 上传ZIP二进制流API响应信息:");
-    console.log("  - Status:", response.status);
-    console.log("  - StatusText:", response.statusText);
-    console.log("  - OK:", response.ok);
-    console.log("  - Duration:", `${duration}ms`);
-    console.log("");
 
     // 记录响应头信息
     const headersObj: Record<string, string> = {};
     response.headers.forEach((value, key) => {
       headersObj[key] = value;
     });
-    console.log("  - Headers:", headersObj);
-    console.log("");
 
     if (!response.ok) {
-      console.error("❌ 上传失败:");
-      console.error("  - Status:", response.status);
-      console.error("  - StatusText:", response.statusText);
-      console.error("  - URL:", response.url);
 
       // 尝试获取错误响应内容
       try {
@@ -1979,84 +1692,27 @@ const uploadZipBytes = async (arrayBuffer: ArrayBuffer) => {
       throw new Error("响应格式错误");
     }
 
-    console.log("✅ 上传ZIP二进制流API响应数据:");
-    console.log("  - Response JSON:", JSON.stringify(resultJson, null, 2));
-    console.log("  - Success:", resultJson.success);
-    console.log("  - Uploaded Count:", resultJson.uploaded_count);
-    console.log("  - Items:", resultJson.items);
-    console.log("  - Skipped:", resultJson.skipped);
-    console.log("");
 
     // 打印每个上传成功的文件信息
     if (resultJson.items && Array.isArray(resultJson.items)) {
-      console.log("📁 上传成功的文件列表:");
       resultJson.items.forEach((item: any, index: number) => {
-        console.log(`  - 文件 ${index + 1}:`, {
-          id: item.id,
-          file_name: item.file_name,
-          internal_code: item.internal_code,
-          file_category_minor: item.file_category_minor,
-          url: item.url,
-          base_url: item.base_url,
-          key: item.key,
-        });
+
       });
     }
 
     // 打印跳过的文件信息
     if (resultJson.skipped && Array.isArray(resultJson.skipped) && resultJson.skipped.length > 0) {
-      console.log("⚠️ 跳过的文件列表:");
+
       resultJson.skipped.forEach((item: any, index: number) => {
         const fileName = item.file_name || "";
         const baseName = fileName.replace(/\.[^/.]+$/, ""); // 去除扩展名
         const cleanedName = baseName.replace(/[（(].*?[）)]$/, "").trim(); // 清理尾部括号等噪音
 
-        console.log(`  - 跳过 ${index + 1}:`, {
-          file_name: item.file_name,
-          reason: item.reason,
-          base_name: baseName,
-          cleaned_name: cleanedName,
-          suggestion: getFileNameSuggestion(fileName, item.reason),
-        });
       });
-
-      // 显示文件名格式建议
-      console.log("");
-      console.log("📝 关于文件名限制的说明:");
-      console.log("  ⚠️ 注意：这是后端接口的限制，不是前端限制");
-      console.log("  - 后端接口 `/api/files/upload-by-bytes` 会根据文件名解析内部代码");
-      console.log("  - 如果文件名无法解析内部代码，文件会被跳过");
-      console.log("  - 这是后端的设计限制，即使使用二进制流传输，也需要文件名符合格式要求");
-      console.log("");
-      console.log("💡 解决方案建议:");
-      console.log(
-        "  1. 后端改进：建议后端添加参数支持指定默认内部代码（如 `default_internal_code`）",
-      );
-      console.log("  2. 后端改进：建议后端对无法解析的文件使用默认内部代码，而不是跳过");
-      console.log("  3. 前端方案：在上传前重命名ZIP内的文件（需要解压和重新打包，较复杂）");
-      console.log("  4. 临时方案：修改ZIP文件内的文件名，使其包含可识别的文件类型标识");
-      console.log("");
-      console.log("📋 当前后端要求的文件名格式:");
-      console.log("  - 文件名需要包含可识别的内部代码标识");
-      console.log("  - 文件名格式示例:");
-      console.log('    * "200105专利回执说明.pdf" - 包含日期和描述');
-      console.log('    * "权利要求书.pdf" - 直接使用文件类型名称');
-      console.log('    * "说明书附图.pdf" - 使用标准文件类型名称');
-      console.log('  - 避免使用纯数字文件名（如 "100104.pdf"）');
-      console.log('  - 避免使用通用名称（如 "resources.zip"）');
-      console.log("");
     }
-
-    console.log("=== 上传ZIP二进制流API调试信息结束 ===");
-    console.log("");
 
     return resultJson;
   } catch (error: any) {
-    console.error("❌ 上传ZIP二进制流失败:");
-    console.error("  - Error:", error);
-    console.error("  - Error Message:", error.message || "未知错误");
-    console.error("  - Error Stack:", error.stack);
-    console.log("");
     throw error;
   }
 };
@@ -2080,12 +1736,10 @@ const executeDeleteConfirm = async () => {
     caseProcessesId = parsedCaseProcessesId;
     caseId = parsedCaseId;
     source = "表单输入";
-    console.log("✅ 从表单获取ID参数用于删除:", { caseProcessesId, caseId });
   } else if (currentCaseProcessesId.value && currentCaseId.value) {
     caseProcessesId = currentCaseProcessesId.value;
-    caseId = currentCaseId.value;
+    caseId = currentCaseId.value
     source = "内部保存的值";
-    console.log("✅ 使用内部保存的ID参数用于删除:", { caseProcessesId, caseId });
   } else {
     // 如果URL中没有参数，且内部也没有保存的值，直接报错
     const errorMessage = "URL中缺少必需的查询参数 case_processes_id 和 case_id，无法删除数据";

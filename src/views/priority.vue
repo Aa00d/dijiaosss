@@ -315,26 +315,7 @@ const {
 
 // 文件相关数据
 const processedFileChecked = ref(false);
-const pendingFileTableData = ref([
-  {
-    index: 1,
-    fileName: "一种书写的专利文件的文件.doc",
-    fileType: "专利撰写文件",
-    fileTitle: "专利新申请五书",
-    fileShortName: "新五书",
-    uploader: "张三",
-    uploadTime: "2025-04-05 10:30",
-  },
-  {
-    index: 2,
-    fileName: "张三科技公司委托书.jpg",
-    fileType: "委托书",
-    fileTitle: "专利代理委托书",
-    fileShortName: "委托书",
-    uploader: "李四",
-    uploadTime: "2025-04-04 15:20",
-  },
-]);
+const pendingFileTableData = ref([]);
 
 const processedFileTableData = ref([
   {
@@ -746,10 +727,16 @@ const downloadResponseFile = async (response: Response) => {
 const onStartXmlConversion = async () => {
   try {
     ElMessage.info("正在启动DAS转档...");
+    // 从URL获取参数
+    const { caseProcessesId: urlCaseProcessesId, caseId: urlCaseId } = getParamsFromUrl();
+
     const fd = new FormData();
     const payload = buildDASPayload();
     // 保留既定后端FormData键：rateReliefString
     fd.append("rateReliefString", payload);
+    // 添加case_id参数，优先使用页面上输入的值，然后回退到URL中的值
+    const caseId = priorityData.value.caseId || urlCaseId || "";
+    fd.append("case_id", caseId);
 
     // XML生成接口使用不同的服务器
     const url = "http://47.108.144.113:9111/api/word/DAS/xml";
@@ -764,10 +751,12 @@ const onStartXmlConversion = async () => {
     const buffer = await blob.arrayBuffer();
 
     // 调用useUploadZipBytes函数上传二进制流到数据库
+    const uploadCaseProcessesId = priorityData.value.processItemId || urlCaseProcessesId || "";
+    const uploadCaseId = priorityData.value.caseId || urlCaseId || "";
     await useUploadZipBytes({
       arrayBuffer: buffer,
-      caseProcessesId: priorityData.value.processItemId,
-      caseId: priorityData.value.caseId,
+      caseProcessesId: uploadCaseProcessesId,
+      caseId: uploadCaseId,
       submissionPage: "优先权",
     });
 
