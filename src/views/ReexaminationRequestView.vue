@@ -227,7 +227,7 @@
               <!-- 文件上传弹窗 -->
               <el-dialog v-model="uploadDialogVisible" title="上传复审意见陈述" width="500px">
                 <el-upload
-                  :action="API_BASE_URL + RECHECK_ENDPOINT"
+                  :action="RECHECK_XML_ACTION"
                   :auto-upload="false"
                   :file-list="uploadFileList"
                   :limit="1"
@@ -316,7 +316,7 @@
                     <!-- 附件上传弹窗 -->
                     <el-dialog v-model="attachmentDialogVisible" title="上传附件" width="500px">
                       <el-upload
-                        :action="API_BASE_URL + RECHECK_ENDPOINT"
+                        :action="RECHECK_XML_ACTION"
                         :auto-upload="false"
                         :file-list="attachmentFileList"
                         :limit="1"
@@ -545,10 +545,12 @@ import { getInternalCodeByFileType, FILE_TYPE_INTERNAL_CODE_MAP } from "../js/In
 import { getCaseInfo } from "../js/useCaseSummary.js";
 import PdfViewer from "../components/PdfViewer.vue";
 import { usePdfViewer } from "../js/usePdfViewer.js";
+import { CONVERT_API_BASE_URL } from "../js/convertApiBase.js";
 
 // ===== API 基础配置 =====
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const RECHECK_ENDPOINT = "/word/recheck/xml";
+/** 复审 XML 转档（47.x Word 服务），与业务 API 分离 */
+const RECHECK_XML_ACTION = `${CONVERT_API_BASE_URL}/word/recheck/xml`;
 
 // 上传接口：直接使用后端服务器地址，不使用本地代理
 const UPLOAD_API_URL = import.meta.env.VITE_API_BASE_URL + "/files/upload-with-code";
@@ -1983,7 +1985,7 @@ const submitRecheckRequest = async () => {
     console.log("请求参数:", recheckRequestData);
     console.groupEnd();
 
-    const apiUrl = "http://47.108.144.113:9111/api/word/recheck/xml";
+    const apiUrl = RECHECK_XML_ACTION;
 
     // 提交到与意见陈述页相同的XML接口
     // 注意：使用 XMLHttpRequest 可以避免浏览器的自动下载行为

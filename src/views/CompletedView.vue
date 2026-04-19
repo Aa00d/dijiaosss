@@ -374,36 +374,10 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { reactive, ref } from 'vue'
-
-interface Row {
-  index: number
-  ourDoc: string
-  appNo: string
-  clientName: string
-  applyType: string
-  techLead: string
-  handleItem: string
-  handler: string
-  finishDate: string
-  firstSubmit: string
-  secondSubmit: string
-  doubleReport: string
-  createDate: string
-  handoverCompleteness: string
-  clientDoc: string
-  taName: string
-  caseType: string
-  precheck: string
-  priority: string
-  internalPeriodText: string
-}
-
-interface DateRange {
-  [0]: string | Date;
-  [1]: string | Date;
-}
+<script setup>
+import { reactive, ref, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { fetchCompletedList, mapCompletedListData } from './CompletedView.js'
 
 const searchForm = reactive({
   ourNumber: '',
@@ -420,70 +394,48 @@ const searchForm = reactive({
   preReview: false,
   bilingual: '',
   caseHandler: '',
-  applicationDate: null as DateRange | null,
-  completionDate: null as DateRange | null,
-  officialDeadline: null as DateRange | null,
-  customerDeadline: null as DateRange | null,
-  internalDeadline: null as DateRange | null,
-  firstReviewDate: null as DateRange | null,
-  secondReviewDate: null as DateRange | null,
-  assignmentDate: null as DateRange | null
+  applicationDate: null,
+  completionDate: null,
+  officialDeadline: null,
+  customerDeadline: null,
+  internalDeadline: null,
+  firstReviewDate: null,
+  secondReviewDate: null,
+  assignmentDate: null
 })
 
-const tableData = ref([
-    {
-      ourDoc: 'CN2023-001',
-      appNo: 'CN2023XXX',
-      clientName: '测试客户A',
-      applyType: '发明',
-      techLead: '张工',
-      handleItem: '复审',
-      handler: '王经理',
-      finishDate: '2023-09-30',
-      firstSubmit: '2023-08-15',
-      secondSubmit: '2023-09-15',
-      doubleReport: '否',
-      createDate: '2023-07-01',
-      handoverCompleteness: '完整',
-      clientDoc: 'CN2023-001',
-      taName: '测试方案A',
-      caseType: '专利',
-      precheck: '否',
-      priority: '否',
-      internalPeriodText: '2023-09-20',
-      applyDate: '2023-06-15'
-    },
-    {
-      ourDoc: 'CN2023-002',
-      appNo: 'CN2023YYY',
-      clientName: '测试客户B',
-      applyType: '实用新型',
-      techLead: '李工',
-      handleItem: '取证',
-      handler: '李经理',
-      finishDate: '2023-10-01',
-      firstSubmit: '2023-09-01',
-      secondSubmit: '',
-      doubleReport: '是',
-      createDate: '2023-08-01',
-      handoverCompleteness: '不完整',
-      clientDoc: 'CN2023-002',
-      taName: '测试方案B',
-      caseType: '专利',
-      precheck: '是',
-      priority: '是',
-      internalPeriodText: '2023-10-30',
-      applyDate: '2023-07-20'
-    }
-])
-
-const total = ref(tableData.value.length)
+const tableData = ref([])
+const loading = ref(false)
+const total = ref(0)
 const pageSize = ref(10)
 const currentPage = ref(1)
 
-function handleSearch() {
-  // 此处放查询逻辑，目前仅 mock
-  console.log('search with', JSON.parse(JSON.stringify(searchForm)))
+async function handleSearch() {
+  loading.value = true
+  try {
+    const response = await fetchCompletedList(searchForm, currentPage.value, pageSize.value)
+
+    if (response.success) {
+      const resultData = Array.isArray(response.data?.data) ? response.data.data : []
+      const totalCount = typeof response.data?.total === 'number' ? response.data.total : 0
+
+      tableData.value = mapCompletedListData(resultData)
+      total.value = totalCount
+
+      if (tableData.value.length === 0) {
+        ElMessage.info('没有找到符合条件的数据')
+      } else {
+        ElMessage.success(`找到 ${tableData.value.length} 条数据`)
+      }
+    } else {
+      ElMessage.error(response.msg || '获取数据失败')
+    }
+  } catch (error) {
+    console.error('查询失败:', error)
+    ElMessage.error('查询失败，请稍后重试')
+  } finally {
+    loading.value = false
+  }
 }
 
 function handleReset() {
@@ -518,24 +470,28 @@ function handleExport() {
   console.log('export')
 }
 
-function handleSizeChange(size: number) {
+async function handleSizeChange(size) {
   pageSize.value = size
+  currentPage.value = 1
+  await handleSearch()
   console.log('page size changed:', size)
 }
 
-function handleCurrentChange(current: number) {
+async function handleCurrentChange(current) {
   currentPage.value = current
+  await handleSearch()
   console.log('current page changed:', current)
 }
 
-function onPageChange(page: number) {
-  console.log('page', page)
-}
-
-function handleSelectionChange(selection: any[]) {
+function handleSelectionChange(selection) {
   // 选择事件处理函数
   console.log('selection changed:', selection)
 }
+
+// 初始加载数据
+onMounted(() => {
+  handleSearch()
+})
 </script>
 
 <style scoped>

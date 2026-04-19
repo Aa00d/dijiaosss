@@ -11,12 +11,10 @@ import {
 import PdfViewer from "../components/PdfViewer.vue";
 import { usePdfViewer } from "../js/usePdfViewer.js";
 import { useUploadZipBytes } from "../js/useUploadZipBytes.js";
+import { CONVERT_API_BASE_URL } from "../js/convertApiBase.js";
 
 // =================== 新增/调整：API 常量 ===================
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const CONVERT_API_BASE_URL =
-  import.meta.env.VITE_CONVERT_API_BASE_URL ||
-  (import.meta.env.DEV ? "/api-convert" : "http://47.108.144.113:9111/api");
 const UPLOAD_API_URL = import.meta.env.VITE_API_BASE_URL + "/files/upload-with-code";
 const FILE_QUERY_API_URL = import.meta.env.VITE_API_BASE_URL + "/files/list-by-submission";
 

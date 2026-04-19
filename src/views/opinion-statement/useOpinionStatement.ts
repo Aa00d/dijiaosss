@@ -9,14 +9,12 @@ import { useUploadZipBytes } from "../../js/useUploadZipBytes.js";
 import { getFilesBySubmission } from "../../js/useFileList.js";
 import { usePdfViewer } from "../../js/usePdfViewer.js";
 import ZipPreview from "../../components/ZipPreview.vue";
+import { CONVERT_API_BASE_URL } from "../../js/convertApiBase.js";
 
 /** 意见陈述书（非正常请求）页面逻辑，供 opinion-statement.vue 使用 */
 export function useOpinionStatement() {
-// API配置：查询等业务用 VITE_API_BASE_URL；转档用 VITE_CONVERT_API_BASE_URL（勿回退到 API_BASE_URL）
+// API配置：查询等业务用 VITE_API_BASE_URL；转档用 convertApiBase.js（默认 47.x Word 服务）
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const CONVERT_API_BASE_URL =
-  import.meta.env.VITE_CONVERT_API_BASE_URL ||
-  (import.meta.env.DEV ? "/api-convert" : "http://47.108.144.113:9111/api");
 
 // PDF 查看器
 const pdfViewer = usePdfViewer() as any;
