@@ -29,8 +29,11 @@ const zipData = ref<ArrayBuffer | null>(null);
 const router = useRouter();
 const route = useRoute();
 
-// API配置
+// API配置：查询等业务用 VITE_API_BASE_URL；转档用 VITE_CONVERT_API_BASE_URL（勿回退到 API_BASE_URL，否则会跨域）
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const CONVERT_API_BASE_URL =
+  import.meta.env.VITE_CONVERT_API_BASE_URL ||
+  (import.meta.env.DEV ? "/api-convert" : "http://47.108.144.113:9111/api");
 
 // 获取URL参数
 const getQueryParams = () => {
@@ -1978,197 +1981,111 @@ const fetchPetitionData = async () => {
   }
 };
 
-// 启动转档XML（无效宣告接口）
+// 启动转档XML（无效宣告接口）— POST /api/declare/xml，JSON 体与后端约定一致
 const onStartXmlConversion = async () => {
   try {
-    // 先构建提交数据（用于 DeclareString 和 DeclareSqlString）
+    // 先构建提交数据（用于 declareString）
     buildSubmitData();
 
-    // 基础校验
+    if (!idQueryForm.case_id) {
+      ElMessage.error("缺少案件 ID，请通过 URL 提供 case_id");
+      return;
+    }
+    const caseIdNum = Number(idQueryForm.case_id);
+    if (!Number.isFinite(caseIdNum)) {
+      ElMessage.error("case_id 无效");
+      return;
+    }
+
+    // 基础校验（接口字段 declareString）
     if (!submitForm.DeclareString.trim()) {
       ElMessage.error("声明内容不能为空，请先填写表单信息");
       return;
     }
-    if (!submitForm.DeclareSqlString.trim()) {
-      ElMessage.error("DeclareSqlString 不能为空，请先填写表单信息");
-      return;
-    }
 
-    // 构建FormData
-    const formData = new FormData();
-
-    // 预先计算 docx 值（稍后按指定顺序追加）
     const docxValue = docx.value.trim() || submitForm.docx.trim();
 
-    // 4. image: List<String> - 可选的图片URL（允许多个，JPG）
+    // image: string[] — 委托书侧文件 URL（常见为扫描件：图片或 PDF）
     const imageUrlRecords = powerOfAttorneyTableData.value.filter((file: any) => {
       const name = (file.original_filename || "").toLowerCase();
-      return name.endsWith(".jpg") || name.endsWith(".jpeg");
+      return (
+        name.endsWith(".jpg") ||
+        name.endsWith(".jpeg") ||
+        name.endsWith(".png") ||
+        name.endsWith(".pdf")
+      );
     });
     const imageUrls: string[] = imageUrlRecords
       .map((f: any) => f.url || f.file_url || (f.id ? `${API_BASE_URL}/file/download/${f.id}` : ""))
       .filter((u: string) => !!u);
 
-    console.log("📸 从委托书文件列表中收集到的图片URL数量:", imageUrls.length);
-    if (imageUrls.length > 0) {
-      const imageJoined = imageUrls.join(",");
-      formData.append("image", imageJoined);
-      console.log("✅ 已按逗号拼接添加到 FormData 的 image(URL):", imageJoined);
-    } else {
-      console.log("ℹ️ 没有图片URL，image 参数将不会被发送（可选）");
-    }
+    console.log("📸 委托书文件 URL 数量:", imageUrls.length, imageUrls);
 
-    // 5. comparisonPage: List<FileNameDto> - 允许多个文件 + 名称
-    // 从 fileTableData 中获取 handleAttachmentFileChange 上传的PDF文件（special=1，PDF格式）
-    // FileNameDto 格式：{ MultipartFile file; String name; }
-    const pdfFileRecords = fileTableData.value.filter((file: any) => {
+    // comparisonPage: { file: string; name: string }[] — 附件中对比/意见书等可下载 URL，单文件单条
+    const comparisonFileRecords = fileTableData.value.filter((file: any) => {
       const fileName = (file.original_filename || "").toLowerCase();
-      // 仅按扩展名筛选PDF，避免分类名称不一致导致空列表
-      return fileName.endsWith(".pdf");
+      return (
+        fileName.endsWith(".pdf") ||
+        fileName.endsWith(".docx") ||
+        fileName.endsWith(".doc")
+      );
     });
 
-    console.log("📄 从附件文件列表中找到的PDF文件数量:", pdfFileRecords.length);
-
-    // 将PDF记录按内部名称分组，并把每组的URL用逗号拼接
-    const comparisonItems: Array<{ file: string; name: string }> = [];
-    const groupMap = new Map<string, { urls: string[]; fileNames: string[] }>();
-    for (let i = 0; i < pdfFileRecords.length; i++) {
-      const fileRecord = pdfFileRecords[i];
+    const comparisonPage: Array<{ file: string; name: string }> = [];
+    for (let i = 0; i < comparisonFileRecords.length; i++) {
+      const fileRecord = comparisonFileRecords[i];
       const fileId = fileRecord.id;
-      const fileOriginalName = fileRecord.original_filename || `comparison_${i}.pdf`;
+      const fileOriginalName = fileRecord.original_filename || `comparison_${i}`;
       const url = fileRecord.url || (fileId ? `${API_BASE_URL}/file/download/${fileId}` : "");
       if (!url) {
         console.warn(`⚠️ 文件 ${fileOriginalName} 缺少可用URL或ID，跳过`);
         continue;
       }
-      const internalName =
+      const label =
+        fileRecord.file_description ||
         fileRecord.file_subcategory ||
-        fileRecord.file_category ||
         fileRecord.file_abbreviation ||
-        "对比页";
-      const entry = groupMap.get(internalName);
-      if (entry) {
-        entry.urls.push(url);
-        entry.fileNames.push(fileOriginalName);
-      } else {
-        groupMap.set(internalName, { urls: [url], fileNames: [fileOriginalName] });
-      }
-    }
-    for (const [internalName, { urls, fileNames }] of groupMap.entries()) {
-      const fileJoined = urls.join(",");
-      const namesJoined = fileNames.join(",");
-      const nameValue = `${internalName}+${namesJoined}`;
-      comparisonItems.push({ file: fileJoined, name: nameValue });
-      console.log(`📄 分组[${internalName}] 已拼接URL:`, fileJoined, "名称:", nameValue);
-    }
-
-    // comparisonPage: List<FileNameDto>（其中 file 为 String），使用索引 bracket 形式
-    if (comparisonItems.length > 0) {
-      comparisonItems.forEach((item) => {
-        formData.append(`comparisonPage.file`, item.file);
-        formData.append(`comparisonPage.name`, item.name);
-        console.log(`📄 已添加对比项到 FormData [${item.key}]:`, item.file, "名称:", item.name);
+        fileOriginalName;
+      comparisonPage.push({
+        file: url,
+        name: label || `文件${i + 1}`,
       });
-      console.log(
-        `✅ 总共添加了 ${comparisonItems.length} 个对比项到 FormData (file 为逗号拼接 URL)`,
-      );
-    } else {
-      console.log("ℹ️ 没有对比项，comparisonPage 参数将不会被发送（可选参数）");
+      console.log(`📄 comparisonPage[${i}]:`, url, comparisonPage[comparisonPage.length - 1].name);
     }
 
-    // 3. docx: String - 可选的 docx 文件名或路径（字符串类型）
-    if (docxValue) {
-      formData.append("docx", docxValue);
-      console.log("📝 docx (String):", docxValue);
-    } else {
-      console.warn("⚠️ docx 内容为空，将不发送此参数（可选）");
-    }
+    const payload: Record<string, unknown> = {
+      image: imageUrls,
+      comparisonPage,
+      case_id: caseIdNum,
+      docx: docxValue || "",
+      declareString: submitForm.DeclareString,
+    };
 
-    // 4. DeclareSqlString: String - SQL 内容字符串
-    formData.append("DeclareSqlString", submitForm.DeclareSqlString);
+    console.log("📋 转档 JSON 摘要:", {
+      imageCount: imageUrls.length,
+      comparisonCount: comparisonPage.length,
+      case_id: caseIdNum,
+      docx: docxValue || "(空)",
+      declareStringLen: submitForm.DeclareString.length,
+    });
 
-    // 5. DeclareString: String - 声明文字（JSON格式字符串）
-    formData.append("DeclareString", submitForm.DeclareString);
-
-    // 调试：打印所有 FormData 内容
-    console.log("📋 FormData 内容摘要:");
-    console.log("- image URL 数:", imageUrls.length, "(已添加到FormData)");
-    console.log("- comparisonPage 项数:", comparisonItems.length, "(已收集URL并添加到FormData)");
-    console.log("- docx:", docxValue || "(空)");
-    console.log("- DeclareSqlString:", submitForm.DeclareSqlString ? "已设置" : "(空)");
-    console.log("- DeclareString:", submitForm.DeclareString ? "已设置" : "(空)");
-
-    // 如果没有图片URL，给出提示
     if (imageUrls.length === 0) {
-      console.warn("⚠️ 没有图片URL，image 参数将不会被发送（这是可选的）");
+      console.warn("⚠️ 委托书无可用 image URL（接口仍可能接受空数组）");
     }
-    if (comparisonItems.length === 0) {
-      console.warn("⚠️ 没有对比项，comparisonPage 参数将不会被发送（这是可选的）");
-    }
-
-    // 打印完整的 FormData（用于调试）
-    console.log("📦 完整的 FormData 条目:");
-    try {
-      // 使用类型断言来访问 entries 方法
-      const formDataEntries = (formData as any).entries();
-      if (formDataEntries) {
-        for (const [key, value] of formDataEntries) {
-          if (value instanceof File) {
-            console.log(`  ${key}: [File] ${value.name} (${value.size} bytes, ${value.type})`);
-          } else {
-            const strValue = String(value);
-            const preview = strValue.length > 100 ? strValue.substring(0, 100) + "..." : strValue;
-            console.log(`  ${key}: ${preview}`);
-          }
-        }
-      }
-    } catch (e) {
-      console.log("无法遍历 FormData:", e);
+    if (comparisonPage.length === 0) {
+      console.warn("⚠️ 附件中无对比/文档 URL（comparisonPage 为空）");
     }
 
     ElMessage.info("正在启动转档XML，请稍候...");
 
-    // 发送请求到无效宣告接口
-    // 使用指定的相对接口路径
-    const possibleUrls = ["api/declare/xml"];
+    const declareXmlUrl = `${CONVERT_API_BASE_URL}/declare/xml`;
+    console.log("🌐 POST", declareXmlUrl);
 
-    let response: Response | null = null;
-    let lastError: any = null;
-    let lastUrl = "";
-    let lastStatusCode: number | null = null;
-
-    // 依次尝试每个URL
-    for (const apiUrl of possibleUrls) {
-      try {
-        console.log(`🌐 尝试请求URL: ${apiUrl}`);
-        response = await fetch(apiUrl, {
-          method: "POST",
-          body: formData,
-        });
-
-        lastStatusCode = response.status;
-        console.log(`✅ 请求成功，状态码: ${response.status}, URL: ${apiUrl}`);
-
-        // 如果是其他错误状态码，也跳出循环（让后续代码处理）
-        lastUrl = apiUrl;
-        break;
-      } catch (fetchError: any) {
-        console.warn(`⚠️ 请求失败 (${apiUrl}):`, fetchError);
-        lastError = fetchError;
-        lastUrl = apiUrl;
-
-        // 如果还有下一个URL，继续尝试
-        if (apiUrl !== possibleUrls[possibleUrls.length - 1]) {
-          continue;
-        }
-      }
-    }
-
-    if (!response) {
-      throw new Error(
-        `请求失败：所有URL都返回404或失败。最后尝试的URL: ${lastUrl}，状态码: ${lastStatusCode || "N/A"}，错误: ${lastError?.message || "未知错误"}`,
-      );
-    }
+    const response = await fetch(declareXmlUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -2202,17 +2119,22 @@ const onStartXmlConversion = async () => {
       }
     })();
 
-    // 不再自动下载文件，只保存数据用于后续处理
-    // 下载文件（已注释，点击不会下载）
-    // const url = window.URL.createObjectURL(blob)
-    // const a = document.createElement("a")
-    // a.href = url
-    // a.download = filename
-    // a.click()
-    // window.URL.revokeObjectURL(url)
-
     if (isZip) {
-      ElMessage.success("✅ 转档XML成功，文件已上传到服务器");
+      try {
+        const downloadBlob = new Blob([buffer], { type: "application/zip" });
+        const href = URL.createObjectURL(downloadBlob);
+        const a = document.createElement("a");
+        a.href = href;
+        a.download = filename;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(href);
+        ElMessage.success("已开始下载转档压缩包");
+      } catch (dlErr) {
+        console.warn("本地下载触发失败:", dlErr);
+      }
       // 转档成功后，继续将 ZIP 二进制流上传至文件服务以解包并入库
       try {
         const cpId = idQueryForm.case_processes_id;
@@ -2255,7 +2177,7 @@ const onStartXmlConversion = async () => {
       }
     } else {
       try {
-        const responseText = (await new Response(blob).text()).trim();
+        const responseText = new TextDecoder("utf-8", { fatal: false }).decode(u8).trim();
         // 将常见的简单文本视为成功
         if (
           responseText === "1" ||
@@ -2264,25 +2186,42 @@ const onStartXmlConversion = async () => {
           responseText.toLowerCase() === "success"
         ) {
           ElMessage.success("✅ 转档XML成功（文本响应）");
-          // 刷新已转档文件列表（special=666）
           await loadProcessedFiles();
         } else {
-          // 尝试解析JSON
           let parsed: any = null;
           try {
             parsed = JSON.parse(responseText);
-          } catch {}
-          if (parsed && (parsed.code === 200 || parsed.success === true)) {
-            ElMessage.success("✅ 转档XML成功");
-            // 刷新已转档文件列表（special=666）
-            await loadProcessedFiles();
+          } catch {
+            /* 非 JSON */
+          }
+          // 部分后端 HTTP 200 但 body 为业务错误 JSON（如 code:20005），需优先展示 message
+          if (parsed && typeof parsed === "object") {
+            const code = parsed.code;
+            const bizOk =
+              parsed.success === true ||
+              code === 200 ||
+              code === 0 ||
+              code === "200" ||
+              code === "0";
+            if (bizOk) {
+              ElMessage.success("✅ 转档XML成功");
+              await loadProcessedFiles();
+            } else if (parsed.message) {
+              ElMessage.error(parsed.message);
+            } else {
+              ElMessageBox.alert(`转档未生成 ZIP：\n${responseText}`, "响应提示", {
+                type: "warning",
+              });
+            }
           } else {
-            ElMessageBox.alert(`接口返回非ZIP数据：\n${responseText}`, "响应提示", {
+            ElMessageBox.alert(`接口返回非 ZIP 数据：\n${responseText}`, "响应提示", {
               type: "info",
             });
           }
         }
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     }
   } catch (error: any) {
     console.error("❌ 转档XML接口请求错误：", error);

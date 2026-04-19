@@ -18,7 +18,7 @@ import { useFileDelete, deleteFileById } from "../js/useFileDelete.js";
 const zipData = ref<ArrayBuffer | null>(null);
 // API配置 - 使用代理路径避免CORS问题
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-//const API_BASE_URL = 'http://bf7a9b3d.natappfree.cc/api'
+//const API_BASE_URL = 'http://t6ce5869.natappfree.cc/api'
 // 提交接口专用基地址（仅提交补正XML走此地址）
 const SUBMISSION_BASE_URL = "http://47.108.144.113:9111/api";
 // 补正数据接口类型定义
@@ -2343,40 +2343,23 @@ async function submitAdditionsCorrections() {
       ElMessage.warning("未在上传管理或页面分组中找到“声明文件”，将不携带 fileNameDto 提交");
     }
 
-    const fd = new FormData();
-    dtoList.forEach((g: any, idx: number) => {
-      // 后端要求参数名为：fileNameDto，包含两个string字段：url、fileCategoryMinor
-      fd.append(`fileNameDto[${idx}].url`, g.url);
-      fd.append(`fileNameDto[${idx}].fileCategoryMinor`, g.fileCategoryMinor);
-      // 传递名称（若后端支持），便于服务端识别来源
-      if (g.name) fd.append(`fileNameDto[${idx}].name`, g.name);
-    });
-
-    // MysqlString（示例字段按指定规则拼接）
-    const deadline = formatDate((correctionTempData as any).correction_deadline);
-    const businessTypeVal =
-      typeof petitionData.value?.applicationType === "number"
-        ? petitionData.value.applicationType
-        : Number(caseInfo.value.applicationType || 0);
-    const institutionCodeVal = petitionData.value?.institutionCode || "51217";
-    const signatureVal =
-      petitionData.value?.organizationName ||
-      caseInfo.value.agency ||
-      "成都睿道智诚专利代理有限公司";
-    const mysqlPayload = {
-      date: deadline,
-      applicationNumber: caseInfo.value.applicationNumber || "",
-      nameInvention: caseInfo.value.caseName || "",
-      CustomerName: caseInfo.value.customerName || "",
-      signature: signatureVal,
-      institutionCode: institutionCodeVal,
-      businessType: businessTypeVal,
-      fileType: 0,
+    // 构建 JSON 格式的请求参数
+    const requestData = {
+      fileNameDto: dtoList.map((g: any) => ({
+        file: g.url,
+        name: g.name || g.fileCategoryMinor || "文件",
+      })),
+      cases_id: Number(caseId.value) || 0,
+      correctionLetterString: correctionLetterString.value,
     };
-    statementSqlString.value = JSON.stringify(mysqlPayload);
-    fd.append("MysqlString", statementSqlString.value);
+
+    // 控制台打印便于排查
+    console.group("🧾 补正请求参数");
+    console.log("请求参数:", requestData);
+    console.groupEnd();
 
     // 补正说明 JSON
+    const deadline = formatDate((correctionTempData as any).correction_deadline);
     const list = ((correctionList?.value as any[]) || []).map((it: any) => ({
       order: it.sequence,
       fileName: it.document_name,
@@ -2395,21 +2378,19 @@ async function submitAdditionsCorrections() {
       correctionContent: list,
     };
     correctionLetterString.value = JSON.stringify(letter);
-    fd.append("correctionLetterString", correctionLetterString.value);
+    requestData.correctionLetterString = correctionLetterString.value;
 
-    // 调试输出（可在控制台查看 FormData 条目）
-    console.log("提交补正 FormData 构成:");
+    // 调试输出
+    console.log("提交补正请求数据构成:");
     console.log(
-      "FormData 字段预览: MysqlString=",
-      !!statementSqlString.value,
-      ", correctionLetterString=",
+      "请求字段预览: correctionLetterString=",
       !!correctionLetterString.value,
       ", fileNameDto条目数=",
       dtoList.length,
     );
     try {
       console.table(
-        dtoList.map((d, i) => ({ idx: i, url: d.url, fileCategoryMinor: d.fileCategoryMinor })),
+        dtoList.map((d, i) => ({ idx: i, file: d.url, name: d.name || d.fileCategoryMinor })),
       );
     } catch {}
 
@@ -2418,7 +2399,11 @@ async function submitAdditionsCorrections() {
     const endpoint = `${SUBMISSION_BASE_URL}${ADDITIONS_CORRECTIONS_PATH}`;
     console.log("准备请求补正XML接口:", endpoint);
     const t0 = performance.now?.() ?? Date.now();
-    const resp = await fetch(endpoint, { method: "POST", body: fd });
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestData),
+    });
     const t1 = performance.now?.() ?? Date.now();
     const costMs = Math.round(t1 - t0);
 

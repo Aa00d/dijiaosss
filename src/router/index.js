@@ -10,7 +10,7 @@ import priority from '../views/priority.vue'
 import RecordChange from '../views/record-change.vue'
 import InvalidDeclaration from '../views/invalid-declaration.vue'
 import ReexaminationInvalid from '../views/ReexaminationInvalidationView.vue'
-import OpinionStatement from '../views/opinion-statement.vue'
+import OpinionStatement from '../views/opinion-statement/opinion-statement.vue'
 import RestorePatentView from '../views/PatentRestorationView.vue'
 import WithdrawPatentView from '../views/recall.vue'
 import GiveUpPatentView from '../views/waive.vue'
@@ -62,7 +62,7 @@ const router = createRouter({
     { path: '/withdraw', name: 'withdraw', component: WithdrawPatentView },
     // 评价报告或检索报告√
     { path: '/report', name: 'report', component: ReportView },
-
+     // 实质审查√
       { path: '/substantive-examination', name: 'substantive-examination', component: Substantiveexamination },
       // 意见陈述（关于费用）√
       { path: '/fee-opinion-statement', name: 'fee-opinion-statement', component: FeeOpinionStatement },

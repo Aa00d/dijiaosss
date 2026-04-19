@@ -264,7 +264,7 @@
                 <el-table-column prop="uploadTime" label="上传时间"></el-table-column>
                 <el-table-column label="操作">
                   <template #default="scope">
-                    <el-button type="danger" @click="deleteFile(scope.row.id)">删除</el-button>
+                    <el-button type="danger" @click="deleteFile(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -331,7 +331,7 @@
                 <el-table-column prop="uploadTime" label="上传时间"></el-table-column>
                 <el-table-column label="操作">
                   <template #default="scope">
-                    <el-button type="danger" @click="deleteFile(scope.row.id)">删除</el-button>
+                    <el-button type="danger" @click="deleteFile(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -360,7 +360,7 @@
             <el-table-column label="操作">
               <template #default="scope">
                 <el-button type="text" @click="downloadFile(scope.row)">下载</el-button>
-                <el-button type="text" @click="deleteFile(scope.row.id)">删除</el-button>
+                <el-button type="text" @click="deleteFile(scope.row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -858,6 +858,7 @@ const handleQueryFiles = async () => {
           .filter((file) => file.internalCode === "B100012")
           .map((file, index) => ({
             id: file.id || index + 1,
+            backendId: file.id || index + 1,
             fileName: file.fileName || "",
             fileCategory: file.fileCategoryMinor || "",
             fileTitle: file.fileTitle || file.fileName || "",
@@ -1020,6 +1021,7 @@ const applyReviewResponse = (data) => {
       .filter((file) => file.internalCode === "B100012")
       .map((file, index) => ({
         id: file.sequence || file.id || index + 1,
+        backendId: file.id || file.sequence || index + 1,
         fileName: file.file_name || "",
         fileCategory: file.fileCategoryMinor || file.file_category || "",
         fileTitle: file.file_name || "",
@@ -1217,7 +1219,9 @@ const applyUserDataToPage = (userData) => {
       // 添加新的文件列表
       uploadedFiles.forEach((file, index) => {
         statementFiles.value.push({
-          id: file.sequence ?? index + 1,
+          id: file.sequence ?? file.id ?? index + 1,
+          backendId: file.id ?? file.sequence ?? null,
+          file_id: file.id ?? file.sequence ?? null,
           fileName: file.file_name || "",
           fileCategory: file.file_category || "意见陈述书",
           fileTitle: file.file_title || file.file_name || "意见陈述书",
@@ -1228,7 +1232,9 @@ const applyUserDataToPage = (userData) => {
 
         // 同时添加到待转档文件列表
         pendingFiles.value.push({
-          id: pendingFiles.value.length + 1,
+          id: file.id ?? file.sequence ?? pendingFiles.value.length + 1,
+          backendId: file.id ?? file.sequence ?? null,
+          file_id: file.id ?? file.sequence ?? null,
           fileName: file.file_name || "",
           fileCategory: file.file_category || "意见陈述书",
           fileTitle: file.file_title || file.file_name || "上传文件",
@@ -1524,9 +1530,12 @@ async function confirmUpload() {
       if (currentUploadTarget.value === "comparison") {
         comparisonFile.value = selectedFile.value;
         comparisonFileName.value = combinedUploadName.value;
+        const uploadedId = uploadResult.data?.id || null;
         // 将文件名追加到“申请人部分”的表格
         additionalFiles.value.push({
-          id: additionalFiles.value.length + 1,
+          id: uploadedId || additionalFiles.value.length + 1,
+          backendId: uploadedId,
+          file_id: uploadedId,
           fileName: combinedUploadName.value,
           fileCategory: "意见陈述书正文", // 固定为意见陈述书正文，符合需求
           fileTitle: "上传文件",
@@ -1536,7 +1545,9 @@ async function confirmUpload() {
         });
         // 将文件名追加到“待转档文件”表格
         pendingFiles.value.push({
-          id: pendingFiles.value.length + 1,
+          id: uploadedId || pendingFiles.value.length + 1,
+          backendId: uploadedId,
+          file_id: uploadedId,
           fileName: combinedUploadName.value,
           fileCategory: "意见陈述书正文",
           fileTitle: "上传文件",
@@ -1548,6 +1559,7 @@ async function confirmUpload() {
       } else {
         statementFile.value = selectedFile.value;
         statementFileName.value = combinedUploadName.value;
+        const uploadedId = uploadResult.data?.id || null;
 
         // 上传成功后，调用getFilesBySubmission获取文件URL
         try {
@@ -1585,7 +1597,9 @@ async function confirmUpload() {
 
           // 保存文件信息，包括URL
           statementFiles.value.push({
-            id: statementFiles.value.length + 1,
+            id: uploadedId || statementFiles.value.length + 1,
+            backendId: uploadedId,
+            file_id: uploadedId,
             fileName: combinedUploadName.value,
             fileCategory: uploadType.value, // 使用下拉框选择的上传类型作为文件小类
             fileTitle: fileTypeDescription,
@@ -1600,7 +1614,9 @@ async function confirmUpload() {
           console.error("获取文件URL失败:", urlError);
           // 即使获取URL失败，仍然添加文件信息
           statementFiles.value.push({
-            id: statementFiles.value.length + 1,
+            id: uploadedId || statementFiles.value.length + 1,
+            backendId: uploadedId,
+            file_id: uploadedId,
             fileName: combinedUploadName.value,
             fileCategory: uploadType.value,
             fileTitle: fileTypeDescription,
@@ -1616,7 +1632,9 @@ async function confirmUpload() {
 
         // 同时追加到“待转档文件”表格
         pendingFiles.value.push({
-          id: pendingFiles.value.length + 1,
+          id: uploadedId || pendingFiles.value.length + 1,
+          backendId: uploadedId,
+          file_id: uploadedId,
           fileName: combinedUploadName.value,
           fileCategory: "意见陈述书正文",
           fileTitle: "上传文件",
@@ -1940,7 +1958,9 @@ async function handleFileChange(file, type) {
 
           // 保存文件信息，包括URL
           const fileItem = {
-            id: additionalFiles.value.length + 1,
+            id: uploadResult.data?.id || additionalFiles.value.length + 1,
+            backendId: uploadResult.data?.id || null,
+            file_id: uploadResult.data?.id || null,
             fileName: file.name,
             fileCategory: "意见陈述书正文",
             fileTitle: "修改对照页",
@@ -1989,7 +2009,9 @@ async function handleFileChange(file, type) {
 
           // 保存文件信息，包括URL
           const fileItem = {
-            id: additionalFiles.value.length + 1,
+            id: uploadResult.data?.id || additionalFiles.value.length + 1,
+            backendId: uploadResult.data?.id || null,
+            file_id: uploadResult.data?.id || null,
             fileName: file.name,
             fileCategory: "意见陈述书正文",
             fileTitle: fileType,
@@ -2040,7 +2062,9 @@ async function handleFileChange(file, type) {
       if (type === "comparison") {
         if (uploadMode.value === "修订模式") {
           additionalFiles.value.push({
-            id: additionalFiles.value.length + 1,
+            id: uploadResult.data?.id || additionalFiles.value.length + 1,
+            backendId: uploadResult.data?.id || null,
+            file_id: uploadResult.data?.id || null,
             fileName: file.name,
             fileCategory: "意见陈述书正文",
             fileTitle: "修改对照页",
@@ -2694,28 +2718,34 @@ function handleProofSelectChange(value) {
 }
 
 // 删除文件函数
-const deleteFile = async (id) => {
+const deleteFile = async (file) => {
   try {
+    const backendId = typeof file === "object" ? file.file_id || file.backendId || file.id : file;
+
     // 调用接口删除文件
-    await deleteFileById(id);
+    await deleteFileById(backendId);
 
     // 删除成功后更新本地文件列表
     // 更新additionalFiles列表
     const additionalIndex = additionalFiles.value.findIndex(
-      (file) => file.id === id || file.file_id === id,
+      (item) => item.file_id === backendId || item.backendId === backendId || item.id === backendId,
     );
     if (additionalIndex > -1) {
       additionalFiles.value.splice(additionalIndex, 1);
     }
 
     // 更新statementFiles列表
-    const statementIndex = statementFiles.value.findIndex((file) => file.id === id);
+    const statementIndex = statementFiles.value.findIndex(
+      (item) => item.file_id === backendId || item.backendId === backendId || item.id === backendId,
+    );
     if (statementIndex > -1) {
       statementFiles.value.splice(statementIndex, 1);
     }
 
     // 更新pendingFiles列表
-    const pendingIndex = pendingFiles.value.findIndex((file) => file.id === id);
+    const pendingIndex = pendingFiles.value.findIndex(
+      (item) => item.file_id === backendId || item.backendId === backendId || item.id === backendId,
+    );
     if (pendingIndex > -1) {
       pendingFiles.value.splice(pendingIndex, 1);
     }
