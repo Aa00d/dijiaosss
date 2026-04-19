@@ -2155,24 +2155,6 @@ const attachmentTableData = ref([
 
 // 待转档文件数据
 const pendingFiles = ref([
-  {
-    serialNumber: 1,
-    uploadFileName: "一种书写的专利文件的文件.doc",
-    fileSubcategory: "专利撰写文件",
-    fileName: "专利新申请五书",
-    fileAbbreviation: "新五书",
-    uploadPerson: "张三",
-    uploadTime: "2025-04-05 10:30",
-  },
-  {
-    serialNumber: 2,
-    uploadFileName: "张三科技公司委托书.jpg",
-    fileSubcategory: "委托书",
-    fileName: "专利代理委托书",
-    fileAbbreviation: "委托书",
-    uploadPerson: "李四",
-    uploadTime: "2025-04-04 15:20",
-  },
 ]);
 
 // 已转档文件数据
@@ -4529,6 +4511,12 @@ const uploadZipBytes = async (arrayBuffer: ArrayBuffer) => {
 const submitAlterationXmlCorrections = async () => {
   try {
     const fd = new FormData();
+
+    // 添加 case_id 到 FormData
+    const urlParams = getIdsFromUrl();
+    const caseIdValue = urlParams.caseId?.toString() || currentCaseId.value?.toString() || "";
+    fd.append("case_id", caseIdValue);
+    console.log("📋 添加 case_id 到 FormData:", caseIdValue);
 
     // 使用URL而不是文件对象
     // corrections：从上传委托书中获取的URL列表，使用数组形式传递

@@ -1265,6 +1265,12 @@ const executeSubmit = async () => {
     form.append("patentApplicationString", "{}");
     form.append("petitionSqlString", "{}");
 
+    // 从URL获取case_id并添加到FormData
+    const urlParams = getParamsFromUrl();
+    const caseIdValue = urlParams.case_id || caseInfo.caseId || "";
+    form.append("case_id", caseIdValue);
+    console.log("📋 添加 case_id 到 FormData:", caseIdValue);
+
     // 调试日志和复现信息
     console.log("🧾 rateReliefString", rateReliefString);
     console.log("🔗 URL Params", params);
@@ -1338,8 +1344,9 @@ const executeSubmit = async () => {
         console.log("📤 准备上传二进制流到数据库...");
 
         // 获取case_processes_id和case_id（如果有），否则使用默认值
-        const caseProcessesId = 2001; // 可以根据实际情况从参数或状态中获取
-        const caseId = 1001; // 可以根据实际情况从参数或状态中获取
+        const urlParams = getParamsFromUrl();
+        const caseProcessesId = caseInfo.processItemId || urlParams.case_processes_id || "2001";
+        const caseId = caseInfo.caseId || urlParams.case_id || "1001";
         const submissionPage = "提前公布";
 
         // 调用上传函数
@@ -1351,6 +1358,11 @@ const executeSubmit = async () => {
         });
 
         console.log("📤 二进制流上传完成:", uploadResult);
+
+        // 上传成功后刷新已转档文件列表
+        console.log("🔄 上传成功，刷新已转档文件列表...");
+        await loadProcessedFiles();
+        console.log("✅ 已转档文件列表刷新完成");
       } catch (uploadError) {
         console.error("📤 二进制流上传失败:", uploadError);
         // 上传失败不影响主流程，继续返回成功状态

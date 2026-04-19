@@ -11,6 +11,7 @@ import {
 import PdfViewer from "../components/PdfViewer.vue";
 import { usePdfViewer } from "../js/usePdfViewer.js";
 import { useUploadZipBytes } from "../js/useUploadZipBytes.js";
+import { CONVERT_API_BASE_URL } from "../js/convertApiBase.js";
 
 // =================== 新增/调整：API 常量 ===================
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -1280,26 +1281,8 @@ const onSubmit = async () => {
   try {
     updateDateInfo();
 
-    // 必填校验：docx 文本内容（来源 formData.opinion，增加测试信息）
+    // docx 为可选：接口仍传字符串，无正文时传空串
     const docxText = (formData.opinion ?? "").toString();
-    if (!docxText || !docxText.trim()) {
-      const raw = docxText ?? "";
-      console.group("🧪 docx 必填校验");
-      console.log("- 原值长度:", raw.length);
-      console.log("- 去空白后长度:", raw.trim().length);
-      console.log("- 前80字符预览:", raw.slice(0, 80));
-      console.log("- 判定: 空内容，阻止提交");
-      console.groupEnd();
-      ElMessage.error("docx 字段为必填，请填写内容");
-      return;
-    } else {
-      const raw = docxText;
-      console.group("🧪 docx 必填校验");
-      console.log("- 原值长度:", raw.length);
-      console.log("- 去空白后长度:", raw.trim().length);
-      console.log("- 判定: 合格，继续提交");
-      console.groupEnd();
-    }
 
     if (attachmentFilePayload.value.length === 0) {
       ElMessage.warning("请至少上传一个附件文件");
@@ -1318,34 +1301,26 @@ const onSubmit = async () => {
       return;
     }
 
-    const form = new FormData();
-    const statementStr = buildStatementRecheckString();
-    const mysqlStr = buildMysqlString();
-    form.append("StatementRecheckString", statementStr);
-    form.append("MysqlString", mysqlStr);
-    // docx：按后端要求，使用 formData.opinion 提交纯文本字符串
-    form.append("docx", docxText || "");
-
-    // images字段：直接提交URL数组
     if (imagesUrls.value.length === 0) {
       ElMessage.error("请至少上传一份无效委托书扫描件（用于 images 字段）");
       return;
     }
 
-    // 直接提交URL数组，不下载文件
-    imagesUrls.value.forEach((url, index) => {
-      form.append(`images[${index}]`, url);
-    });
-    console.log("📤 images字段已添加:", imagesUrls.value.length, "个URL");
-
-    // comparisonPage：直接提交URL和名称
     if (comparisonPageUrls.value.length === 0) {
       ElMessage.error("请至少上传一个附件（用于 comparisonPage 字段）");
       return;
     }
 
-    // 直接提交URL和名称，不下载文件
-    comparisonPageUrls.value.forEach(({ url, name }, idx) => {
+    const { case_id } = idsForActions();
+    const caseIdNum = Number(case_id);
+    if (!case_id || !Number.isFinite(caseIdNum)) {
+      ElMessage.error("缺少有效的案件 ID，请通过 URL 提供 case_id");
+      return;
+    }
+
+    const statementStr = buildStatementRecheckString();
+
+    const comparisonPage = comparisonPageUrls.value.map(({ url, name }) => {
       const n = (name || "").trim();
       const finalName =
         n ||
@@ -1354,56 +1329,35 @@ const onSubmit = async () => {
           .pop()
           ?.replace(/\.(pdf|docx?)$/i, "") ||
         "附件";
-      form.append(`comparisonPage[${idx}].url`, url);
-      form.append(`comparisonPage[${idx}].name`, finalName);
+      return { file: url, name: finalName };
     });
-    console.log("📤 comparisonPage字段已添加:", comparisonPageUrls.value.length, "个URL");
-    if (textFile.value) form.append("text_file", textFile.value, textFile.value.name);
 
-    form.append("attachments", JSON.stringify(fileTableData.value));
-    form.append(
-      "internet_evidence",
-      JSON.stringify({
-        enabled: !!internetEvidence.value,
-        evidence_name: evidenceName.value,
-        evidence_number: evidenceNumber.value,
-      }),
-    );
-    form.append("latestUploadedFiles", JSON.stringify(latestFilesPayload));
+    const payload = {
+      images: [...imagesUrls.value],
+      comparisonPage,
+      docx: docxText.trim() || "",
+      case_id: caseIdNum,
+      statementRecheckString: statementStr,
+    };
 
-    // 注意：XML端点不需要 case_id / case_processes_id，移除这两个字段的提交
+    console.group("🧪 复审意见陈述无效转档 JSON（POST /word/recheckstatement/xml）");
+    console.log("- docx 长度:", (docxText || "").length);
+    console.log("- images 数量:", payload.images.length);
+    console.log("- comparisonPage 数量:", payload.comparisonPage.length);
+    console.log("- case_id:", payload.case_id);
+    console.log("- statementRecheckString 长度:", statementStr.length);
+    console.groupEnd();
 
-    // ===== 调试信息：提交摘要 =====
-    try {
-      const formDataSummary: Record<string, any> = {};
-      for (const [key, value] of (form as any).entries()) {
-        formDataSummary[key] =
-          value instanceof File
-            ? value.name
-            : typeof value === "string"
-              ? key === "docx"
-                ? value.length > 80
-                  ? value.slice(0, 80) + "…"
-                  : value
-                : value
-              : value;
-      }
-      console.group("🧪 无效复审XML提交测试信息");
-      console.log("- docx长度:", (docxText || "").length);
-      console.log("- 无效委托书扫描件(images)数量:", imagesUrls.value.length, "（URL数量）");
-      console.log("- comparisonPage数量:", comparisonPageUrls.value.length, "（URL数量）");
-      console.log("- StatementRecheckString长度:", statementStr.length);
-      console.log("- MysqlString长度:", mysqlStr.length);
-      console.log("- FormData摘要:", formDataSummary);
-      console.groupEnd();
-    } catch (e) {
-      console.warn("打印FormData摘要失败：", e);
-    }
+    ElMessage.info("正在启动转档XML，请稍候...");
 
-    const endpoint = `http://47.108.144.113:9111/api/word/recheckstatement/xml`;
+    const endpoint = `${CONVERT_API_BASE_URL}/word/recheckstatement/xml`;
     console.log("[ReexaminationInvalidationView] POST", endpoint);
 
-    const resp = await fetch(endpoint, { method: "POST", body: form });
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
     const contentType = resp.headers.get("content-type");
     const contentDisposition = resp.headers.get("content-disposition");
@@ -1411,20 +1365,51 @@ const onSubmit = async () => {
     console.log("Content-Type:", contentType);
     console.log("Content-Disposition:", contentDisposition);
     if (resp.ok) {
-      if (
-        (contentType && contentType.includes("application/zip")) ||
-        (contentType && contentType.includes("application/octet-stream"))
-      ) {
-        const blob = await resp.blob();
-        if (blob.size === 0) {
-          ElMessage.error("服务器返回了空文件");
-          return;
+      const blob = await resp.blob();
+      if (blob.size === 0) {
+        ElMessage.error("服务器返回了空文件");
+        return;
+      }
+
+      const head = await blob.slice(0, 2).arrayBuffer();
+      const u8h = new Uint8Array(head);
+      const looksLikeZip = u8h.length >= 2 && u8h[0] === 0x50 && u8h[1] === 0x4b;
+      const ct = contentType || "";
+      const ctLooksZip =
+        ct.includes("application/zip") ||
+        ct.includes("application/octet-stream") ||
+        ct.includes("application/x-zip-compressed");
+
+      if (ctLooksZip || looksLikeZip) {
+        let filename = "复审无效转档.zip";
+        if (contentDisposition) {
+          const m = contentDisposition.match(/filename\*?=(?:UTF-8'')?["']?([^;"']+)["']?/);
+          if (m && m[1]) {
+            try {
+              filename = decodeURIComponent(m[1].trim().replace(/^UTF-8''/, "").replace(/^"|"$/g, ""));
+            } catch {
+              filename = m[1];
+            }
+          }
         }
 
-        // 将blob转换为ArrayBuffer，准备上传到数据库
+        try {
+          const href = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = href;
+          a.download = filename;
+          a.rel = "noopener";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(href);
+          ElMessage.success("已开始下载转档压缩包");
+        } catch (dlErr) {
+          console.warn("本地下载触发失败:", dlErr);
+        }
+
         const arrayBuffer = await blob.arrayBuffer();
 
-        // 上传zip二进制流到数据库
         try {
           const { case_id, case_processes_id } = idsForActions();
           console.log("📤 开始上传zip二进制流到数据库:", {
@@ -1440,20 +1425,17 @@ const onSubmit = async () => {
             caseId: case_id,
             submissionPage: "复审无效",
             apiBaseUrl: API_BASE_URL,
-            special: "666", // 设置 special=666，标识为已转档文件
+            special: "666",
           } as any);
 
           console.log("✅ 二进制流已上传到数据库:", uploadResult);
           ElMessage.success("转档成功，二进制流已上传到数据库");
 
-          // 上传成功后，延迟调用查询接口获取 special=666 的文件列表
-          // 延迟确保数据库已保存文件
           setTimeout(async () => {
             console.log("🔄 上传成功后，查询已转档文件列表（special=666）...");
             await queryProcessedFiles();
           }, 1000);
         } catch (uploadErr) {
-          // 上传失败则抛出错误
           console.error("❌ 上传zip文件到数据库失败:", uploadErr);
           ElMessage.error(
             `上传到数据库失败：${uploadErr instanceof Error ? uploadErr.message : "未知错误"}`,
@@ -1461,11 +1443,21 @@ const onSubmit = async () => {
           throw uploadErr;
         }
       } else {
-        // 如果返回的不是二进制流，尝试解析JSON响应
         try {
-          const data = await resp.json();
-          ElMessage.success("提交成功");
-          console.log("[ReexaminationInvalidationView] submit success:", data);
+          const text = await blob.text();
+          let data: Record<string, unknown> | null = null;
+          try {
+            data = JSON.parse(text) as Record<string, unknown>;
+          } catch {
+            /* 非 JSON */
+          }
+          if (data) {
+            ElMessage.success("提交成功");
+            console.log("[ReexaminationInvalidationView] submit success:", data);
+          } else {
+            ElMessage.success("提交成功");
+            console.log("[ReexaminationInvalidationView] submit success, body:", text);
+          }
         } catch (e) {
           ElMessage.success("提交成功");
           console.log("[ReexaminationInvalidationView] submit success, unknown response format");

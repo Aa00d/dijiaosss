@@ -6,6 +6,9 @@ import { useUploadZipBytes } from "../js/useUploadZipBytes.js";
 import PdfViewer from "../components/PdfViewer.vue";
 import { usePdfViewer } from "../js/usePdfViewer.js";
 import { deleteFileById } from "../js/useFileDelete.js";
+import { uploadFileWithInternalCode, getInternalCodeByFileType } from "../js/InternalCode.js";
+import { getFilesBySubmission } from "../js/useFileList.js";
+import axios from "axios";
 
 // API服务函数
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -1067,6 +1070,59 @@ const uploadAccept = ref(
   ".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 );
 const fileInputRef = ref<HTMLInputElement | null>(null);
+const jpgInputRef = ref<HTMLInputElement | null>(null);
+
+const triggerJpgUpload = () => {
+  jpgInputRef.value?.click();
+};
+
+const onJpgFileSelected = async (e: Event) => {
+  const input = e.target as HTMLInputElement;
+  const files = input.files;
+  if (!files || files.length === 0) return;
+
+  let addedCount = 0;
+  for (const file of Array.from(files)) {
+    const lower = file.name.toLowerCase();
+    if (!lower.endsWith(".jpg") && !lower.endsWith(".jpeg")) {
+      ElMessage.warning("仅支持JPG/JPEG图片");
+      continue;
+    }
+
+    try {
+      ElMessage.info(`正在上传: ${file.name}...`);
+      const fileSubtype = "恢复权利请求书"; // 默认一个小类
+      const internalCode = getInternalCodeByFileType(fileSubtype);
+
+      const uploadResult = await uploadFileWithInternalCode({
+        file: file,
+        case_processes_id: String(idQueryForm.case_processes_id),
+        case_id: String(idQueryForm.case_id),
+        submission_page: "恢复权利",
+        special: "1",
+        internal_code: internalCode,
+      });
+
+      if (uploadResult.success) {
+        addedCount++;
+      } else {
+        ElMessage.error(`上传失败: ${uploadResult.error}`);
+      }
+    } catch (error: any) {
+      console.error("上传出错:", error);
+    }
+  }
+
+  if (addedCount > 0) {
+    ElMessage.success(`成功上传 ${addedCount} 个文件`);
+    // 清空缓存并刷新列表
+    __filesCache = null;
+    __filesCacheKey = null;
+    __filesCachePromise = null;
+    await loadPendingFiles(idQueryForm.case_processes_id, idQueryForm.case_id);
+  }
+  input.value = "";
+};
 
 const uploadAdditionalFile = () => {
   ElMessage.success("上传附加文件");
@@ -1324,6 +1380,18 @@ const deleteData = async () => {
   }
 };
 
+// 解析 regulationBasis，提取通知日期/名称/编号等字段
+const getRegulationBasisData = () => {
+  try {
+    return patentRestorationData.regulationBasis
+      ? JSON.parse(patentRestorationData.regulationBasis)
+      : {};
+  } catch (error) {
+    console.warn("解析 regulationBasis 失败:", error);
+    return {};
+  }
+};
+
 // 获取请求书数据（用于构建 RecoverString）
 const fetchPetitionData = async () => {
   const caseProcessesId = idQueryForm.case_processes_id;
@@ -1384,73 +1452,102 @@ const onStartXmlConversion = async () => {
       ElMessage.warning("未获取到请求书数据，将使用表单数据");
     }
 
-    // 构建 RecoverString（从请求书数据中获取，如果没有则使用表单数据）
+    const regulationBasisData = getRegulationBasisData();
+
+    const noticeDate =
+      regulationBasisData.data ||
+      regulationBasisData.date ||
+      petitionData?.noticeDate ||
+      petitionData?.notice_date ||
+      caseInfo.issueDate ||
+      new Date().toISOString().split("T")[0];
+
+    const noticeName =
+      regulationBasisData.name ||
+      petitionData?.noticeName ||
+      petitionData?.notice_name ||
+      patentRestorationData.requestRecovery ||
+      "视为撤回通知书";
+
+    const noticeNumber =
+      regulationBasisData.number ||
+      regulationBasisData.document_number ||
+      petitionData?.documentNumber ||
+      petitionData?.document_number ||
+      petitionData?.number ||
+      caseInfo.applicationNumber ||
+      "CH20250905008";
+
+    // 提取JPG图片的URL数组
+    const imageUrls = pendingFiles.value
+      .filter((file) => {
+        const fileName = (file.fileName || "").toLowerCase();
+        return fileName.endsWith(".jpg") || fileName.endsWith(".jpeg");
+      })
+      .map((file) => file.url)
+      .filter((url) => !!url);
+
     const recoverData = {
-      data:
-        petitionData?.noticeDate ||
-        petitionData?.notice_date ||
-        caseInfo.issueDate ||
-        new Date().toISOString().split("T")[0], // 专利局发出通知的日期
-      name:
-        petitionData?.noticeName ||
-        petitionData?.notice_name ||
-        patentRestorationData.requestRecovery ||
-        "视为撤回通知书", // 专利局发出通知的名称
-      number:
-        petitionData?.documentNumber ||
-        petitionData?.document_number ||
-        petitionData?.number ||
-        caseInfo.applicationNumber ||
-        "CH20250905008", // 发文序号
-      select:
-        petitionData?.select !== undefined
-          ? Boolean(petitionData.select)
-          : petitionData?.isForceMajeure !== undefined
-            ? Boolean(petitionData.isForceMajeure)
-            : patentRestorationData.legitimateReason, // 选择（0为正当理由，1为不可抗力）
+      date: noticeDate, // 改为 date，与其它接口保持一致
+      name: noticeName,
+      number: noticeNumber,
+      select: patentRestorationData.forceMajeureReason,
       reason:
+        patentRestorationData.reasonDescription ||
         petitionData?.reason ||
         petitionData?.recoveryReason ||
         petitionData?.recovery_reason ||
-        patentRestorationData.reasonDescription ||
-        "因申请人突发疾病住院治疗，未能在指定期限内答复审查意见，属于不可抗力情形", // 请求恢复权利的理由
+        "因不可抗力因素导致未按时提交文件，现请求恢复权利",
       recordFilingNumber:
+        patentRestorationData.proofFileRecordNumber ||
         petitionData?.recordFilingNumber ||
         petitionData?.record_filing_number ||
         petitionData?.filingNumber ||
-        patentRestorationData.proofFileRecordNumber ||
-        "BH20251020001", // 备案编号
+        "BH20251020001",
     };
 
-    // 构建 mysqlString（从案件信息中获取）
+    // 构造 recordFilingNumber JSON 字符串，修复 400 错误的关键
+    const recordFilingNumberJson = JSON.stringify({
+      date: noticeDate,
+      businessType: 0,
+      case_id: Number(caseId),
+    });
+
+    // 构建 mysqlString（按接口固定结构传参）
     const mysqlStringData: any = {
       applicationNumber: caseInfo.applicationNumber || "",
       nameInvention: caseInfo.caseName || "",
       caseNumber: caseInfo.caseNumber || "",
-      announcement: caseInfo.issueDate || "",
-      businessType: (() => {
-        const appType = caseInfo.applicationType;
-        if (appType === "0" || appType === "发明") return 0;
-        if (appType === "1" || appType === "实用新型") return 1;
-        if (appType === "2" || appType === "外观设计") return 2;
-        return 0; // 默认发明
-      })(),
-      fileType: 1, // 文件类型：发明、实用、外观新申请为0，其他为1
+      announcement: "",
+      businessType: 0,
+      fileType: 1,
     };
 
     // 基础校验
-    if (!recoverData.data || !recoverData.name) {
+    if (!recoverData.date || !recoverData.name) {
       ElMessage.error("数据不完整，请检查通知日期和通知名称");
       return;
     }
 
     // 创建 FormData 对象
     const formData = new FormData();
+    // 添加图片
+    if (imageUrls.length > 0) {
+      imageUrls.forEach((url) => {
+        formData.append("images", url || "");
+      });
+    }
+
     formData.append("RecoverString", JSON.stringify(recoverData));
+    formData.append("recordFilingNumber", recordFilingNumberJson); // 增加顶层 JSON 字段
     formData.append("mysqlString", JSON.stringify(mysqlStringData));
+    formData.append("case_id", String(caseId));
 
     console.log("📋 RecoverString 数据:", recoverData);
+    console.log("📋 recordFilingNumber JSON:", recordFilingNumberJson);
     console.log("📋 mysqlString 数据:", mysqlStringData);
+    console.log("📋 images 数量:", imageUrls.length);
+    console.log("📋 case_id:", caseId);
 
     ElMessage.info("正在启动转档XML，请稍候...");
 
@@ -1474,26 +1571,29 @@ const onStartXmlConversion = async () => {
         contentType.includes("application/octet-stream") ||
         contentType.includes("application/x-zip-compressed"))
     ) {
-      // 不再自动下载文件，只保存数据用于后续处理
-      // 获取文件名（用于日志记录，不用于下载）
-      // let filename = '恢复权利申请.zip'
-      // if (contentDisposition) {
-      //   const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
-      //   if (filenameMatch && filenameMatch[1]) {
-      //     filename = filenameMatch[1].replace(/['"]/g, '')
-      //   }
-      // }
+      let filename = "恢复权利申请.zip";
+      if (contentDisposition) {
+        const filenameStarMatch = contentDisposition.match(/filename\*=UTF-8''([^;\n]*)/i);
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
+        if (filenameStarMatch && filenameStarMatch[1]) {
+          filename = decodeURIComponent(filenameStarMatch[1].replace(/['"]/g, "").trim());
+        } else if (filenameMatch && filenameMatch[1]) {
+          filename = decodeURIComponent(filenameMatch[1].replace(/['"]/g, "").trim());
+        }
+      }
 
-      // 不再自动下载ZIP文件
       const blob = await response.blob();
-      // const url = window.URL.createObjectURL(blob)
-      // const link = document.createElement('a')
-      // link.href = url
-      // link.download = filename
-      // document.body.appendChild(link)
-      // link.click()
-      // document.body.removeChild(link)
-      // window.URL.revokeObjectURL(url)
+      const triggerZipDownload = () => {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+      };
+
       ElMessage.success("✅ 转档XML成功，结果文件已生成");
 
       // 将ZIP二进制流上传到文件服务（submission_page: 恢复权力）
@@ -1511,11 +1611,13 @@ const onStartXmlConversion = async () => {
         });
         // 成功提示由封装内部已处理，这里补充日志
         console.log("恢复权利ZIP二进制上传完成:", uploadResult);
+        triggerZipDownload();
         // 上传成功后刷新已转档文件列表
         await loadProcessedFiles(idQueryForm.case_processes_id, idQueryForm.case_id);
       } catch (uploadErr) {
         console.error("恢复权利ZIP二进制上传失败:", uploadErr);
-        ElMessage.error("恢复权利ZIP二进制上传失败");
+        triggerZipDownload();
+        ElMessage.error("恢复权利ZIP二进制上传失败，已自动下载ZIP文件");
       }
       // 调用删除接口
       // await deleteData()
@@ -2141,6 +2243,18 @@ onMounted(async () => {
                   <el-option label="恢复权利请求书" value="恢复权利请求书"></el-option>
                   <el-option label="证明文件" value="证明文件"></el-option>
                 </el-select>
+                <el-button
+                  type="primary"
+                  @click="triggerJpgUpload"
+                  style="margin-left: 10px"
+                >上传JPG扫描件</el-button>
+                <input
+                  type="file"
+                  ref="jpgInputRef"
+                  style="display: none"
+                  accept=".jpg,.jpeg"
+                  @change="onJpgFileSelected"
+                />
               </div>
               <!-- 已备案证明文件备案编号 -->
               <div class="form-row" style="margin-top: 20px">
