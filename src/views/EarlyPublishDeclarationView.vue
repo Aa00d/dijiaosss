@@ -1265,6 +1265,12 @@ const executeSubmit = async () => {
     form.append("patentApplicationString", "{}");
     form.append("petitionSqlString", "{}");
 
+    // 从URL获取case_id并添加到FormData
+    const urlParams = getParamsFromUrl();
+    const caseIdValue = urlParams.case_id || caseInfo.caseId || "";
+    form.append("case_id", caseIdValue);
+    console.log("📋 添加 case_id 到 FormData:", caseIdValue);
+
     // 调试日志和复现信息
     console.log("🧾 rateReliefString", rateReliefString);
     console.log("🔗 URL Params", params);
