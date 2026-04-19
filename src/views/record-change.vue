@@ -4530,6 +4530,12 @@ const submitAlterationXmlCorrections = async () => {
   try {
     const fd = new FormData();
 
+    // 添加 case_id 到 FormData
+    const urlParams = getIdsFromUrl();
+    const caseIdValue = urlParams.caseId?.toString() || currentCaseId.value?.toString() || "";
+    fd.append("case_id", caseIdValue);
+    console.log("📋 添加 case_id 到 FormData:", caseIdValue);
+
     // 使用URL而不是文件对象
     // corrections：从上传委托书中获取的URL列表，使用数组形式传递
     if (!correctionsUrls.value || correctionsUrls.value.length === 0) {

@@ -1010,7 +1010,7 @@ const processSteps = ref([
 ]);
 // 通用类型定义
 interface FileInfo {
-  id: number;
+  id: number | string;
   fileName: string;
   fileType: string;
   fileTitle: string;
@@ -1907,8 +1907,17 @@ const handleFileUpload = async (event: Event) => {
 
         // 将上传成功的文件添加到pendingFiles列表显示
         const fileUrl = data.url || data.base_url || "";
-        const fileInfo: FileInfo = {
-          id: data.id || Date.now() + index, // 使用后端返回的ID，如果没有则使用时间戳
+      const uploadedFileId = getUploadedFileId(data, `${Date.now()}-${index}`);
+      console.log(" 待转档文件上传返回的数据:", {
+        id: uploadedFileId,
+        rawId: data.id,
+        fileId: data.fileId,
+        file_id: data.file_id,
+        file_name: data.file_name,
+      });
+
+      const fileInfo: FileInfo = {
+          id: uploadedFileId, // 优先使用后端返回的真实ID
           fileName: data.file_name || fileArray[index].name,
           fileType: data.file_type || data.file_sub_type || "未知类型",
           fileTitle: data.file_title || data.file_name || fileArray[index].name,
@@ -2046,7 +2055,8 @@ const handleAdditionalFileUpload = async (event: Event) => {
         const data = result.data;
 
         // 确保使用后端返回的真实数据
-        if (!data.id) {
+        const uploadedFileId = getUploadedFileId(data);
+        if (!uploadedFileId) {
           console.error(" 后端未返回文件ID，无法添加到列表:", data);
           continue;
         }
@@ -2075,7 +2085,7 @@ const handleAdditionalFileUpload = async (event: Event) => {
         }
 
         const uploadedFile: UploadedFile = {
-          id: data.id, // 使用后端返回的真实ID
+          id: uploadedFileId, // 使用后端返回的真实ID
           fileName: data.file_name || fileArray[index].name,
           url: fullUrl, // 完整URL（用于打开/下载）
           baseUrl: purePathUrl, // 纯路径URL（用于提交到后端）
@@ -2092,7 +2102,7 @@ const handleAdditionalFileUpload = async (event: Event) => {
         };
 
         console.log(" 附加文件上传返回的数据:", {
-          id: data.id,
+          id: uploadedFileId,
           file_name: data.file_name,
           url: data.url,
           base_url: data.base_url,
@@ -2266,14 +2276,15 @@ const handlePowerAttorneyUpload = async (event: Event) => {
       const data = (result as any).data;
 
       // 确保使用后端返回的真实数据
-      if (!data.id) {
+      const uploadedFileId = getUploadedFileId(data);
+      if (!uploadedFileId) {
         console.error(" 后端未返回文件ID，无法添加到列表:", data);
         ElMessage.error("上传失败：后端未返回文件ID");
         return;
       }
 
       const uploadedFile: UploadedFile = {
-        id: data.id, // 使用后端返回的真实ID
+        id: uploadedFileId, // 使用后端返回的真实ID
         fileName: data.file_name || file.name,
         url: data.url || data.base_url || "",
         baseUrl: data.base_url || data.url || "",
@@ -2398,6 +2409,7 @@ const removeAdditionalFile = async (index: number) => {
   try {
     const file = uploadedAdditionalFiles.value[index];
     if (!file) return;
+    const fileId = getUploadedFileId(file);
 
     // 确认删除
     await ElMessageBox.confirm(`确定要删除文件"${file.fileName}"吗？删除后无法恢复。`, "提示", {
@@ -2407,13 +2419,13 @@ const removeAdditionalFile = async (index: number) => {
     });
 
     // 调用后端API删除文件
-    if (file.id) {
+    if (fileId) {
       console.log(" 开始删除文件:", {
-        id: file.id,
+        id: fileId,
         fileName: file.fileName,
       });
 
-      await deleteFileById(file.id);
+      await deleteFileById(fileId);
 
       // 从列表中删除
       uploadedAdditionalFiles.value.splice(index, 1);
@@ -2442,6 +2454,7 @@ const removePendingFile = async (index: number) => {
   try {
     const file = pendingFiles.value[index];
     if (!file) return;
+    const fileId = getUploadedFileId(file);
 
     // 确认删除
     await ElMessageBox.confirm(
@@ -2455,13 +2468,13 @@ const removePendingFile = async (index: number) => {
     );
 
     // 调用后端API删除文件
-    if (file.id) {
+    if (fileId) {
       console.log(" 开始删除待转档文件:", {
-        id: file.id,
+        id: fileId,
         fileName: file.fileName,
       });
 
-      await deleteFileById(file.id);
+      await deleteFileById(fileId);
 
       // 从列表中删除
       pendingFiles.value.splice(index, 1);
@@ -2523,6 +2536,7 @@ const removePowerAttorneyFileByIndex = async (index: number) => {
   try {
     const file = uploadedPowerAttorneyFiles.value[index];
     if (!file) return;
+    const fileId = getUploadedFileId(file);
 
     // 确认删除
     await ElMessageBox.confirm(`确定要删除委托书"${file.fileName}"吗？删除后无法恢复。`, "提示", {
@@ -2532,19 +2546,19 @@ const removePowerAttorneyFileByIndex = async (index: number) => {
     });
 
     // 调用后端API删除文件
-    if (file.id) {
+    if (fileId) {
       console.log(" 开始删除委托书:", {
-        id: file.id,
+        id: fileId,
         fileName: file.fileName,
       });
 
-      await deleteFileById(file.id);
+      await deleteFileById(fileId);
 
       // 从列表中删除
       uploadedPowerAttorneyFiles.value.splice(index, 1);
 
       // 如果删除的是当前委托书，清空相关变量
-      if (uploadedPowerAttorneyFile.value?.id === file.id) {
+      if (uploadedPowerAttorneyFile.value?.id === fileId) {
         uploadedPowerAttorneyFile.value = null;
         caseInfo.powerAttorneyFilename = "";
       }
@@ -2556,7 +2570,7 @@ const removePowerAttorneyFileByIndex = async (index: number) => {
     } else {
       // 如果没有ID，只从列表中删除
       uploadedPowerAttorneyFiles.value.splice(index, 1);
-      if (uploadedPowerAttorneyFile.value?.id === file.id) {
+      if (uploadedPowerAttorneyFile.value?.id === fileId) {
         uploadedPowerAttorneyFile.value = null;
         caseInfo.powerAttorneyFilename = "";
       }
@@ -2857,13 +2871,31 @@ const imageUrls = ref<string[]>([]);
 // 新增：附加文件上传后返回的URL数组（用于XML接口的fileAttached字段）
 const attachedFileUrls = ref<string[]>([]);
 
+// 提取后端返回的真实文件ID
+const getUploadedFileId = (data: any, fallbackId?: number | string) => {
+  const candidateIds = [
+    data?.id,
+    data?.fileId,
+    data?.file_id,
+    data?.data?.id,
+    data?.data?.fileId,
+    data?.data?.file_id,
+  ];
+
+  const validId = candidateIds.find(
+    (id) => id !== undefined && id !== null && id !== "" && id !== 0 && id !== "0",
+  );
+
+  return validId ?? fallbackId ?? "";
+};
+
 const newApplicationFileName = computed(() =>
   newApplicationFile.value ? newApplicationFile.value.name : "",
 );
 
 // 已上传的文件列表（用于显示缩略图）
 interface UploadedFile {
-  id: number;
+  id: number | string;
   fileName: string;
   url: string; // 完整URL（用于打开/下载）
   baseUrl?: string; // 纯路径URL（用于提交到后端）

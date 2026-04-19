@@ -2423,6 +2423,11 @@ const startXmlConversion = async () => {
     uploadFormData.append("petitionSqlString", petitionSqlString);
     console.log("添加petitionSqlString参数:", petitionSqlString);
 
+    // 添加case_id参数
+    const caseId = currentCaseId.value || "";
+    uploadFormData.append("case_id", caseId);
+    console.log("添加case_id参数:", caseId);
+
     // 发送文件上传请求到指定的API地址
     const response = await fetch("http://47.108.144.113:9111/api/appearance/xml", {
       method: "POST",
