@@ -318,6 +318,7 @@ interface FileItem {
   uploader: string; // 上传人员
   upload_time: string; // 上传时间
   operation: string; // 操作
+  url?: string; // 文件URL
   raw?: File; // 本地选择的原始文件（用于MultipartFile）
 }
 
@@ -487,6 +488,7 @@ const queryFiles = async (force: boolean = false) => {
             uploader: "未知用户",
             upload_time: file.createTime || new Date().toISOString(),
             operation: "删除",
+            url: typeof file.url === "string" ? file.url : file.fileUrl || "",
           });
         });
 
@@ -500,6 +502,7 @@ const queryFiles = async (force: boolean = false) => {
           uploader: file.uploader,
           upload_time: file.upload_time,
           operation: file.operation,
+          url: file.url,
         }));
 
         ElMessage.success(`成功查询到 ${specialFiles.length} 个special为1的文件`);
@@ -756,6 +759,10 @@ const onImageSelected = async (e: Event) => {
           fileList.value[uploadedFileIndex].uploader = uploadResult.data.uploader || "当前用户";
           fileList.value[uploadedFileIndex].upload_time =
             uploadResult.data.upload_time || new Date().toISOString();
+          fileList.value[uploadedFileIndex].url =
+            typeof uploadResult.data.url === "string"
+              ? uploadResult.data.url
+              : uploadResult.data.fileUrl || "";
           console.log("文件上传成功并更新信息:", uploadResult.data);
         }
       } else {
@@ -776,6 +783,7 @@ const onImageSelected = async (e: Event) => {
     uploader: file.uploader,
     upload_time: file.upload_time,
     operation: file.operation,
+    url: file.url,
   }));
 
   if (addedCount > 0) {
@@ -787,32 +795,47 @@ const onImageSelected = async (e: Event) => {
 };
 
 const submitRevocationXml = async () => {
-  console.log("🔍 开始调用恢复权利XML接口");
+  console.log("🔍 开始调用撤回专利XML接口");
 
   if (!currentCaseId.value) {
     ElMessage.warning("缺少案件ID，无法启动转档XML");
     return;
   }
 
+  // 提取JPG图片的URL数组
+  const imageUrls = fileList.value
+    .filter((file) => file.file_abbreviation === "JPG" && file.url)
+    .map((file) => file.url);
+
+  if (imageUrls.length === 0) {
+    ElMessage.warning("请先上传撤回声明的JPG扫描件");
+    return;
+  }
+
   const formData = new FormData();
 
-  const recoverPayload = {
-    data: recallForm.issueDate || new Date().toISOString().split("T")[0],
-    name: recallForm.submission_type || "审查意见",
-    number: recallForm.applicationNumber || "",
-    select: false,
-    reason: recallForm.proof_file_record_number || "",
-    recordFilingNumber: recallForm.proof_file_record_number || "",
-  };
+  // 构造 recordFilingNumber JSON 字符串
+  const recordFilingNumberJson = JSON.stringify({
+    date: recallForm.issueDate || new Date().toISOString().split("T")[0],
+    businessType: 0,
+    case_id: currentCaseId.value,
+  });
 
-  formData.append("RecoverString", JSON.stringify(recoverPayload));
+  // 按照接口要求构造参数
+  // images 字段在接口中是数组，formData.append 会多次添加
+  imageUrls.forEach((url) => {
+    formData.append("images", url || "");
+  });
+
+  formData.append("recordFilingNumber", recordFilingNumberJson);
   formData.append("case_id", String(currentCaseId.value));
 
-  console.log("✅ 设置RecoverString:", JSON.stringify(recoverPayload));
+  console.log("✅ 设置images:", imageUrls);
+  console.log("✅ 设置recordFilingNumber:", recordFilingNumberJson);
   console.log("✅ 设置case_id:", String(currentCaseId.value));
 
   try {
-    const url = "http://47.108.144.113:9111/api/word/recover/xml";
+    const url = "http://47.108.144.113:9111/api/word/revocation/xml";
     const resp = await axios.post(url, formData, { responseType: "blob" });
     const blob = resp.data as Blob;
 
@@ -839,7 +862,7 @@ const submitRevocationXml = async () => {
 
     const disposition =
       resp.headers?.["content-disposition"] || resp.headers?.["Content-Disposition"] || "";
-    let filename = "恢复权利请求.zip";
+    let filename = "撤回声明请求.zip";
     const matchRFC = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
     const matchQuoted = /filename=\"?([^\";]+)\"?/i.exec(disposition);
     if (matchRFC && matchRFC[1]) {
@@ -867,7 +890,7 @@ const submitRevocationXml = async () => {
         arrayBuffer: buffer,
         caseProcessesId: currentCaseProcessesId.value,
         caseId: currentCaseId.value,
-        submissionPage: "恢复权力",
+        submissionPage: "撤回专利",
         uploadUrl: `${import.meta.env.VITE_API_BASE_URL}/files/upload-by-bytes`,
         timeout: 120000,
       });
@@ -875,7 +898,7 @@ const submitRevocationXml = async () => {
       if (uploadResult.success) {
         triggerZipDownload();
         ElMessage.success(
-          `恢复权利XML生成成功，已上传${uploadResult.uploaded_count || 0}个文件到后端并自动下载`,
+          `撤回专利XML生成成功，已上传${uploadResult.uploaded_count || 0}个文件到后端并自动下载`,
         );
       } else {
         ElMessage.error(`上传失败: ${uploadResult.message || "未知错误"}`);
@@ -885,7 +908,7 @@ const submitRevocationXml = async () => {
       ElMessage.error(`处理ZIP文件失败: ${parseError.message || "未知错误"}`);
       triggerZipDownload();
 
-      ElMessage.success("恢复权利XML生成成功，已开始下载");
+      ElMessage.success("撤回专利XML生成成功，已开始下载");
     }
   } catch (error) {
     console.error("提交失败:", error);
@@ -1350,6 +1373,7 @@ const mapDataToForm = (data: any) => {
           uploader: file.uploader || "",
           upload_time: file.upload_time || "",
           operation: file.operation || "删除",
+          url: file.url || "",
         }));
 
         console.log("映射后的fileList:", fileList.value);
@@ -1364,6 +1388,7 @@ const mapDataToForm = (data: any) => {
           uploader: file.uploader,
           upload_time: file.upload_time,
           operation: file.operation,
+          url: file.url,
         }));
 
         // 数据映射完成后查询文件列表
