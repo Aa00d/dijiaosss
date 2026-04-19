@@ -1956,6 +1956,7 @@ const buildAbandonXmlParams = () => {
       number: waiveForm.Invalidation.detail_input || "",
     },
     recordFlingNumber: waiveForm.proof_file_record_number || "",
+    recordFilingNumber: waiveForm.proof_file_record_number || "",
   };
 
   // mysqlString：从案件信息映射
@@ -2000,6 +2001,7 @@ const submitAbandonXml = async () => {
     fd.append("images", images);
     fd.append("AbandonString", JSON.stringify(abandonString));
     fd.append("mysqlString", JSON.stringify(mysqlString));
+    fd.append("case_id", String(currentCaseId.value || ""));
 
     const url = `http://47.108.144.113:9111/api/word/abandon/xml`;
 
@@ -2090,11 +2092,34 @@ const submitAbandonXml = async () => {
     // 将blob转换为ArrayBuffer，直接上传到数据库
     const arrayBuffer = await blob.arrayBuffer();
 
+    const disposition = resp.headers.get("content-disposition") || "";
+    let filename = "放弃专利声明.zip";
+    const matchRFC = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+    const matchQuoted = /filename=\"?([^\";]+)\"?/i.exec(disposition);
+    if (matchRFC && matchRFC[1]) {
+      filename = decodeURIComponent(matchRFC[1].trim());
+    } else if (matchQuoted && matchQuoted[1]) {
+      filename = decodeURIComponent(matchQuoted[1].trim());
+    }
+
+    const triggerZipDownload = () => {
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    };
+
     // 上传zip二进制流到数据库
     try {
       const uploadResult = await uploadZipBytes(arrayBuffer);
       console.log("✅ 二进制流已上传到数据库");
       console.log("📋 上传结果:", uploadResult);
+
+      triggerZipDownload();
 
       // 如果uploadZipBytes没有提取到URL，这里再次尝试
       if (uploadResult && !zipFileUrl.value) {
@@ -2119,8 +2144,9 @@ const submitAbandonXml = async () => {
         });
       }, 1000);
     } catch (uploadErr) {
-      // 上传失败则抛出错误
       console.error("上传zip文件到数据库失败:", uploadErr);
+      triggerZipDownload();
+      ElMessage.error("上传zip文件到数据库失败，已自动下载ZIP文件");
       throw uploadErr;
     }
 
