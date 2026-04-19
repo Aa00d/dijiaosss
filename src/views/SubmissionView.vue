@@ -112,10 +112,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from "vue";
+import { ref, reactive, onMounted } from "vue";
 import { ElMessage } from "element-plus";
 
-// 搜索表单
+/** ======================
+ * 搜索表单
+ * ====================== */
 const searchForm = reactive({
   ourFileNumber: "",
   applicationNumber: "",
@@ -125,19 +127,26 @@ const searchForm = reactive({
   submissionStatus: "",
 });
 
-// 表格数据
-const tableData = ref<any[]>([]);
+/** ======================
+ * 表格数据
+ * ====================== */
+const tableData = ref([]);
+const loading = ref(false);
 
-// 分页数据
+/** ======================
+ * 分页
+ * ====================== */
 const pagination = reactive({
   currentPage: 1,
   pageSize: 20,
   total: 0,
 });
 
-// 获取状态对应的标签类型
-const getStatusType = (status: string): string => {
-  const statusMap: Record<string, string> = {
+/** ======================
+ * 状态标签类型
+ * ====================== */
+const getStatusType = (status) => {
+  const statusMap = {
     已导入: "success",
     未导入: "warning",
     见回执: "info",
@@ -145,157 +154,144 @@ const getStatusType = (status: string): string => {
   return statusMap[status] || "default";
 };
 
-// 导入CPC客户
+/** ======================
+ * 操作按钮
+ * ====================== */
 const importCPC = () => {
   ElMessage.info("导入CPC客户功能待实现");
 };
 
-// 退回案件
 const returnCase = () => {
   ElMessage.info("退回功能待实现");
 };
 
-// 移交案件
 const transferCase = () => {
   ElMessage.info("移交功能待实现");
 };
 
-// 导出递交包
 const exportSubmissionPackage = () => {
   ElMessage.info("导出递交包功能待实现");
 };
 
-// 重置搜索
+/** ======================
+ * 重置搜索
+ * ====================== */
 const resetSearch = () => {
-  Object.keys(searchForm).forEach((key) => {
-    searchForm[key as keyof typeof searchForm] = "";
+  Object.assign(searchForm, {
+    ourFileNumber: "",
+    applicationNumber: "",
+    agency: "",
+    clientName: "",
+    caseName: "",
+    submissionStatus: "",
   });
+
+  pagination.currentPage = 1;
   loadData();
 };
 
-// 刷新数据
+/** ======================
+ * 查询
+ * ====================== */
 const refreshData = () => {
+  pagination.currentPage = 1;
   loadData();
 };
 
-// 分页大小变化
-const handleSizeChange = (size: number) => {
-  console.log("页面大小变化为:", size);
+/** ======================
+ * 分页变化
+ * ====================== */
+const handleSizeChange = (size) => {
   pagination.pageSize = size;
-  pagination.currentPage = 1; // 重置为第一页
+  pagination.currentPage = 1;
   loadData();
 };
 
-// 当前页变化
-const handleCurrentChange = (current: number) => {
+const handleCurrentChange = (current) => {
   pagination.currentPage = current;
   loadData();
 };
 
-// 加载数据
+/** ======================
+ * 核心：加载数据
+ * ====================== */
 const loadData = async () => {
+  loading.value = true;
+
   try {
-    // 构建请求参数，只包含非空的搜索条件
-    const requestParams = {
-      page: pagination.currentPage,
-      pageSize: pagination.pageSize,
-    };
+    /** 构建请求参数 */
+    const params = new URLSearchParams();
+    params.append('page', pagination.currentPage.toString());
+    params.append('pageSize', pagination.pageSize.toString());
 
-    // 只添加非空的搜索条件
-    if (searchForm.ourFileNumber) requestParams.caseCode = searchForm.ourFileNumber;
-    if (searchForm.applicationNumber) requestParams.applicationNo = searchForm.applicationNumber;
-    if (searchForm.agency) requestParams.agencyNameCn = searchForm.agency;
-    if (searchForm.clientName) requestParams.customerName = searchForm.clientName;
-    if (searchForm.caseName) requestParams.caseName = searchForm.caseName;
-    if (searchForm.submissionStatus)
-      requestParams.status = mapStatusValue(searchForm.submissionStatus);
-
-    console.log("当前分页参数:", {
-      page: pagination.currentPage,
-      pageSize: pagination.pageSize,
-      total: pagination.total,
-    });
-    console.log("搜索条件和分页参数:", requestParams);
-
-    // 调用API接口
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/case/submissions/search`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    /** 请求接口 */
+    const response = await fetch(
+      `http://8.140.210.30:6660/api/v1/case-processes/submitted-list?${params.toString()}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
       },
-      body: JSON.stringify(requestParams),
-    });
+    );
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error: ${response.status}`);
     }
 
     const data = await response.json();
     console.log("API响应:", data);
 
-    // 假设API返回格式为 { data: [], total: number }
-    // 根据实际返回格式调整
-    const resultData = data.data || (Array.isArray(data) ? data : [data]);
-    const totalCount = data.total || resultData.length;
+    /** 标准解析 */
+    const resultData = Array.isArray(data.data?.data) ? data.data.data : [];
+    const totalCount = typeof data.data?.total === "number" ? data.data.total : 0;
 
-    // 映射响应字段到表格字段
+    /** 字段映射 */
     tableData.value = resultData.map((item) => ({
-      status: item.status || item.state || "",
-      ourFileNumber: item.case_code || item.ourFileNumber || "",
-      applicationNumber: item.application_no || item.applicationNumber || "",
-      caseName: item.case_name || item.caseName || "",
-      processingMatter: item.process_name || item.processingMatter || "",
-      officialDeadline: item.official_deadline || item.officialDeadline || "",
-      submissionTime: item.submitted_at || item.submissionTime || "",
-      sameDayApplication: item.same_day_filing || item.sameDayApplication || "",
-      businessType: item.case_type ? "发明" : "实用新型", // 假设1表示发明
-      agency: item.agency_name_cn || item.agency || "",
-      urgentCase: item.preliminary_case || item.urgentCase || false,
-      priorityCase: item.priority_examination || item.priorityCase || false,
+      status: item.submittedAt ? "已导入" : "未导入",
+      ourFileNumber: item.caseCode || "",
+      applicationNumber: "", // 响应中没有applicationNumber字段
+      caseName: item.caseName || "",
+      processingMatter: item.processItemName || "",
+      officialDeadline: item.officialDeadline || "",
+      secondarySubmissionDate: "", // 响应中没有secondarySubmissionDate字段
+      submissionTime: item.submittedAt || "",
+      sameDayApplication: "", // 响应中没有sameDayApplication字段
+      businessType:
+        item.applicationType === "1"
+          ? "发明"
+          : item.applicationType === "2"
+          ? "实用新型"
+          : "外观设计",
+      agency: "", // 响应中没有agency字段
+      urgentCase: false, // 响应中没有urgentCase字段
+      priorityCase: item.isPriority || false,
+      handler: "", // 响应中没有handler字段
     }));
 
-    // 更新分页总数
     pagination.total = totalCount;
-
-    // 前端手动分页（作为备用方案，确保页面大小变化时能正确显示）
-    // 如果API返回了全部数据，前端进行手动分页
-    if (tableData.value.length > pagination.pageSize) {
-      const startIndex = (pagination.currentPage - 1) * pagination.pageSize;
-      const endIndex = startIndex + pagination.pageSize;
-      const pagedData = tableData.value.slice(startIndex, endIndex);
-      tableData.value = pagedData;
-      console.log(
-        `手动分页后显示 ${tableData.value.length} 条数据（每页${pagination.pageSize}条）`,
-      );
-    }
 
     if (tableData.value.length === 0) {
       ElMessage.info("没有找到符合条件的数据");
     } else {
-      ElMessage.success(
-        `找到 ${tableData.value.length} 条数据（每页${pagination.pageSize}条，第${pagination.currentPage}页）`,
-      );
+      ElMessage.success(`找到 ${tableData.value.length} 条数据`);
     }
   } catch (error) {
-    console.error("加载数据失败:", error);
+    console.error("加载失败:", error);
     ElMessage.error("数据加载失败，请稍后重试");
     tableData.value = [];
     pagination.total = 0;
+  } finally {
+    loading.value = false;
   }
 };
 
-// 映射状态值
-const mapStatusValue = (value: string): string => {
-  const statusMap: Record<string, string> = {
-    imported: "已导入",
-    not_imported: "未导入",
-    receipt_received: "见回执",
-  };
-  return statusMap[value] || value;
-};
-
-// 初始加载数据
-loadData();
+/** ======================
+ * 初始化
+ * ====================== */
+onMounted(() => {
+  loadData();
+});
 </script>
 
 <style scoped>
