@@ -1324,6 +1324,18 @@ const deleteData = async () => {
   }
 };
 
+// 解析 regulationBasis，提取通知日期/名称/编号等字段
+const getRegulationBasisData = () => {
+  try {
+    return patentRestorationData.regulationBasis
+      ? JSON.parse(patentRestorationData.regulationBasis)
+      : {};
+  } catch (error) {
+    console.warn("解析 regulationBasis 失败:", error);
+    return {};
+  }
+};
+
 // 获取请求书数据（用于构建 RecoverString）
 const fetchPetitionData = async () => {
   const caseProcessesId = idQueryForm.case_processes_id;
@@ -1384,58 +1396,59 @@ const onStartXmlConversion = async () => {
       ElMessage.warning("未获取到请求书数据，将使用表单数据");
     }
 
-    // 构建 RecoverString（从请求书数据中获取，如果没有则使用表单数据）
+    const regulationBasisData = getRegulationBasisData();
+
+    const noticeDate =
+      regulationBasisData.data ||
+      regulationBasisData.date ||
+      petitionData?.noticeDate ||
+      petitionData?.notice_date ||
+      caseInfo.issueDate ||
+      new Date().toISOString().split("T")[0];
+
+    const noticeName =
+      regulationBasisData.name ||
+      petitionData?.noticeName ||
+      petitionData?.notice_name ||
+      patentRestorationData.requestRecovery ||
+      "视为撤回通知书";
+
+    const noticeNumber =
+      regulationBasisData.number ||
+      regulationBasisData.document_number ||
+      petitionData?.documentNumber ||
+      petitionData?.document_number ||
+      petitionData?.number ||
+      caseInfo.applicationNumber ||
+      "CH20250905008";
+
     const recoverData = {
-      data:
-        petitionData?.noticeDate ||
-        petitionData?.notice_date ||
-        caseInfo.issueDate ||
-        new Date().toISOString().split("T")[0], // 专利局发出通知的日期
-      name:
-        petitionData?.noticeName ||
-        petitionData?.notice_name ||
-        patentRestorationData.requestRecovery ||
-        "视为撤回通知书", // 专利局发出通知的名称
-      number:
-        petitionData?.documentNumber ||
-        petitionData?.document_number ||
-        petitionData?.number ||
-        caseInfo.applicationNumber ||
-        "CH20250905008", // 发文序号
-      select:
-        petitionData?.select !== undefined
-          ? Boolean(petitionData.select)
-          : petitionData?.isForceMajeure !== undefined
-            ? Boolean(petitionData.isForceMajeure)
-            : patentRestorationData.legitimateReason, // 选择（0为正当理由，1为不可抗力）
+      data: noticeDate,
+      name: noticeName,
+      number: noticeNumber,
+      select: patentRestorationData.forceMajeureReason,
       reason:
+        patentRestorationData.reasonDescription ||
         petitionData?.reason ||
         petitionData?.recoveryReason ||
         petitionData?.recovery_reason ||
-        patentRestorationData.reasonDescription ||
-        "因申请人突发疾病住院治疗，未能在指定期限内答复审查意见，属于不可抗力情形", // 请求恢复权利的理由
+        "因不可抗力因素导致未按时提交文件，现请求恢复权利",
       recordFilingNumber:
+        patentRestorationData.proofFileRecordNumber ||
         petitionData?.recordFilingNumber ||
         petitionData?.record_filing_number ||
         petitionData?.filingNumber ||
-        patentRestorationData.proofFileRecordNumber ||
-        "BH20251020001", // 备案编号
+        "BH20251020001",
     };
 
-    // 构建 mysqlString（从案件信息中获取）
+    // 构建 mysqlString（按接口固定结构传参）
     const mysqlStringData: any = {
-      applicationNumber: caseInfo.applicationNumber || "",
-      nameInvention: caseInfo.caseName || "",
-      caseNumber: caseInfo.caseNumber || "",
-      announcement: caseInfo.issueDate || "",
-      businessType: (() => {
-        const appType = caseInfo.applicationType;
-        if (appType === "0" || appType === "发明") return 0;
-        if (appType === "1" || appType === "实用新型") return 1;
-        if (appType === "2" || appType === "外观设计") return 2;
-        return 0; // 默认发明
-      })(),
-      fileType: 1, // 文件类型：发明、实用、外观新申请为0，其他为1
+      applicationNumber: "",
+      nameInvention: "",
+      caseNumber: "",
+      announcement: "",
+      businessType: 0,
+      fileType: 1,
     };
 
     // 基础校验
@@ -1448,9 +1461,11 @@ const onStartXmlConversion = async () => {
     const formData = new FormData();
     formData.append("RecoverString", JSON.stringify(recoverData));
     formData.append("mysqlString", JSON.stringify(mysqlStringData));
+    formData.append("case_id", String(caseId));
 
     console.log("📋 RecoverString 数据:", recoverData);
     console.log("📋 mysqlString 数据:", mysqlStringData);
+    console.log("📋 case_id:", caseId);
 
     ElMessage.info("正在启动转档XML，请稍候...");
 
@@ -1474,26 +1489,29 @@ const onStartXmlConversion = async () => {
         contentType.includes("application/octet-stream") ||
         contentType.includes("application/x-zip-compressed"))
     ) {
-      // 不再自动下载文件，只保存数据用于后续处理
-      // 获取文件名（用于日志记录，不用于下载）
-      // let filename = '恢复权利申请.zip'
-      // if (contentDisposition) {
-      //   const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
-      //   if (filenameMatch && filenameMatch[1]) {
-      //     filename = filenameMatch[1].replace(/['"]/g, '')
-      //   }
-      // }
+      let filename = "恢复权利申请.zip";
+      if (contentDisposition) {
+        const filenameStarMatch = contentDisposition.match(/filename\*=UTF-8''([^;\n]*)/i);
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
+        if (filenameStarMatch && filenameStarMatch[1]) {
+          filename = decodeURIComponent(filenameStarMatch[1].replace(/['"]/g, "").trim());
+        } else if (filenameMatch && filenameMatch[1]) {
+          filename = decodeURIComponent(filenameMatch[1].replace(/['"]/g, "").trim());
+        }
+      }
 
-      // 不再自动下载ZIP文件
       const blob = await response.blob();
-      // const url = window.URL.createObjectURL(blob)
-      // const link = document.createElement('a')
-      // link.href = url
-      // link.download = filename
-      // document.body.appendChild(link)
-      // link.click()
-      // document.body.removeChild(link)
-      // window.URL.revokeObjectURL(url)
+      const triggerZipDownload = () => {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+      };
+
       ElMessage.success("✅ 转档XML成功，结果文件已生成");
 
       // 将ZIP二进制流上传到文件服务（submission_page: 恢复权力）
@@ -1511,11 +1529,13 @@ const onStartXmlConversion = async () => {
         });
         // 成功提示由封装内部已处理，这里补充日志
         console.log("恢复权利ZIP二进制上传完成:", uploadResult);
+        triggerZipDownload();
         // 上传成功后刷新已转档文件列表
         await loadProcessedFiles(idQueryForm.case_processes_id, idQueryForm.case_id);
       } catch (uploadErr) {
         console.error("恢复权利ZIP二进制上传失败:", uploadErr);
-        ElMessage.error("恢复权利ZIP二进制上传失败");
+        triggerZipDownload();
+        ElMessage.error("恢复权利ZIP二进制上传失败，已自动下载ZIP文件");
       }
       // 调用删除接口
       // await deleteData()
