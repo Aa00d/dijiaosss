@@ -608,7 +608,6 @@ const fetchOpinionFilesBySubmissionLocal = async (params: OpinionQueryParams) =>
     const fileType = String(it?.fileType || it?.type || "");
     const internalCode = String(it?.internalCode || it?.internal_code || "");
     const ext = (name.split(".").pop() || "").toLowerCase();
-    const submissionPage = String(it?.submission_page || it?.submissionPage || "");
 
     const uploaded: any = {
       id,
@@ -1524,7 +1523,7 @@ const deleteComparisonFile = async (id: number) => {
   }
 };
 
-const handleFileUpload = async (uploadFile: any, uploadFiles: any[]) => {
+const handleFileUpload = async (uploadFile: any, _uploadFiles: any[]) => {
   const now = new Date();
   const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
@@ -2242,10 +2241,10 @@ const downloadFile = async (row: any) => {
       // 从 Content-Disposition 提取文件名（如后端设置了该头）
       const cd =
         resp.headers.get("Content-Disposition") || resp.headers.get("content-disposition") || "";
-      const nameFromHeaderMatch = cd.match(/filename\*?=(?:UTF-8''|\")?([^";]+)/i);
+      const nameFromHeaderMatch = cd.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
       if (nameFromHeaderMatch && nameFromHeaderMatch[1]) {
         try {
-          const decoded = decodeURIComponent(nameFromHeaderMatch[1].replace(/\"/g, ""));
+          const decoded = decodeURIComponent(nameFromHeaderMatch[1].replace(/"/g, ""));
           if (decoded) fileName = decoded;
         } catch {
           // 保留原 fileName
