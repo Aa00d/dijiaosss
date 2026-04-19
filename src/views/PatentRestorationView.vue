@@ -6,6 +6,9 @@ import { useUploadZipBytes } from "../js/useUploadZipBytes.js";
 import PdfViewer from "../components/PdfViewer.vue";
 import { usePdfViewer } from "../js/usePdfViewer.js";
 import { deleteFileById } from "../js/useFileDelete.js";
+import { uploadFileWithInternalCode, getInternalCodeByFileType } from "../js/InternalCode.js";
+import { getFilesBySubmission } from "../js/useFileList.js";
+import axios from "axios";
 
 // API服务函数
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -1067,6 +1070,59 @@ const uploadAccept = ref(
   ".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 );
 const fileInputRef = ref<HTMLInputElement | null>(null);
+const jpgInputRef = ref<HTMLInputElement | null>(null);
+
+const triggerJpgUpload = () => {
+  jpgInputRef.value?.click();
+};
+
+const onJpgFileSelected = async (e: Event) => {
+  const input = e.target as HTMLInputElement;
+  const files = input.files;
+  if (!files || files.length === 0) return;
+
+  let addedCount = 0;
+  for (const file of Array.from(files)) {
+    const lower = file.name.toLowerCase();
+    if (!lower.endsWith(".jpg") && !lower.endsWith(".jpeg")) {
+      ElMessage.warning("仅支持JPG/JPEG图片");
+      continue;
+    }
+
+    try {
+      ElMessage.info(`正在上传: ${file.name}...`);
+      const fileSubtype = "恢复权利请求书"; // 默认一个小类
+      const internalCode = getInternalCodeByFileType(fileSubtype);
+
+      const uploadResult = await uploadFileWithInternalCode({
+        file: file,
+        case_processes_id: String(idQueryForm.case_processes_id),
+        case_id: String(idQueryForm.case_id),
+        submission_page: "恢复权利",
+        special: "1",
+        internal_code: internalCode,
+      });
+
+      if (uploadResult.success) {
+        addedCount++;
+      } else {
+        ElMessage.error(`上传失败: ${uploadResult.error}`);
+      }
+    } catch (error: any) {
+      console.error("上传出错:", error);
+    }
+  }
+
+  if (addedCount > 0) {
+    ElMessage.success(`成功上传 ${addedCount} 个文件`);
+    // 清空缓存并刷新列表
+    __filesCache = null;
+    __filesCacheKey = null;
+    __filesCachePromise = null;
+    await loadPendingFiles(idQueryForm.case_processes_id, idQueryForm.case_id);
+  }
+  input.value = "";
+};
 
 const uploadAdditionalFile = () => {
   ElMessage.success("上传附加文件");
@@ -1422,8 +1478,17 @@ const onStartXmlConversion = async () => {
       caseInfo.applicationNumber ||
       "CH20250905008";
 
+    // 提取JPG图片的URL数组
+    const imageUrls = pendingFiles.value
+      .filter((file) => {
+        const fileName = (file.fileName || "").toLowerCase();
+        return fileName.endsWith(".jpg") || fileName.endsWith(".jpeg");
+      })
+      .map((file) => file.url)
+      .filter((url) => !!url);
+
     const recoverData = {
-      data: noticeDate,
+      date: noticeDate, // 改为 date，与其它接口保持一致
       name: noticeName,
       number: noticeNumber,
       select: patentRestorationData.forceMajeureReason,
@@ -1441,30 +1506,47 @@ const onStartXmlConversion = async () => {
         "BH20251020001",
     };
 
+    // 构造 recordFilingNumber JSON 字符串，修复 400 错误的关键
+    const recordFilingNumberJson = JSON.stringify({
+      date: noticeDate,
+      businessType: 0,
+      case_id: Number(caseId),
+    });
+
     // 构建 mysqlString（按接口固定结构传参）
     const mysqlStringData: any = {
-      applicationNumber: "",
-      nameInvention: "",
-      caseNumber: "",
+      applicationNumber: caseInfo.applicationNumber || "",
+      nameInvention: caseInfo.caseName || "",
+      caseNumber: caseInfo.caseNumber || "",
       announcement: "",
       businessType: 0,
       fileType: 1,
     };
 
     // 基础校验
-    if (!recoverData.data || !recoverData.name) {
+    if (!recoverData.date || !recoverData.name) {
       ElMessage.error("数据不完整，请检查通知日期和通知名称");
       return;
     }
 
     // 创建 FormData 对象
     const formData = new FormData();
+    // 添加图片
+    if (imageUrls.length > 0) {
+      imageUrls.forEach((url) => {
+        formData.append("images", url || "");
+      });
+    }
+
     formData.append("RecoverString", JSON.stringify(recoverData));
+    formData.append("recordFilingNumber", recordFilingNumberJson); // 增加顶层 JSON 字段
     formData.append("mysqlString", JSON.stringify(mysqlStringData));
     formData.append("case_id", String(caseId));
 
     console.log("📋 RecoverString 数据:", recoverData);
+    console.log("📋 recordFilingNumber JSON:", recordFilingNumberJson);
     console.log("📋 mysqlString 数据:", mysqlStringData);
+    console.log("📋 images 数量:", imageUrls.length);
     console.log("📋 case_id:", caseId);
 
     ElMessage.info("正在启动转档XML，请稍候...");
@@ -2161,6 +2243,18 @@ onMounted(async () => {
                   <el-option label="恢复权利请求书" value="恢复权利请求书"></el-option>
                   <el-option label="证明文件" value="证明文件"></el-option>
                 </el-select>
+                <el-button
+                  type="primary"
+                  @click="triggerJpgUpload"
+                  style="margin-left: 10px"
+                >上传JPG扫描件</el-button>
+                <input
+                  type="file"
+                  ref="jpgInputRef"
+                  style="display: none"
+                  accept=".jpg,.jpeg"
+                  @change="onJpgFileSelected"
+                />
               </div>
               <!-- 已备案证明文件备案编号 -->
               <div class="form-row" style="margin-top: 20px">
