@@ -346,12 +346,6 @@
 
         <el-tab-pane label="待转档文件" name="pending-content">
           <div class="btn-group">
-            <input
-              ref="xmlFileInputRef"
-              type="file"
-              style="display: none"
-              @change="handleXmlFileSelect"
-            />
             <el-button :loading="isXmlTransforming" @click="submitForm">启动转档XML</el-button>
           </div>
 
@@ -514,7 +508,6 @@ import { uploadFileWithInternalCode, getInternalCodeByFileType } from "../js/Int
 import { getFilesBySubmission } from "../js/useFileList.js";
 import { deleteFileById } from "../js/useFileDelete.js";
 const zipData = ref(null);
-const xmlFileInputRef = ref(null);
 const isXmlTransforming = ref(false);
 
 // 当前激活的标签页
@@ -1550,8 +1543,10 @@ async function confirmUpload() {
           fileShortName: "对比",
           uploader: "当前用户",
           uploadTime: new Date().toLocaleString("zh-CN"),
+          base_url: uploadResult.base_url || "",
+          signed_url: uploadResult.url || "",
         });
-        // 将文件名追加到“待转档文件”表格
+        // 将文件名追加到"待转档文件"表格
         pendingFiles.value.push({
           id: uploadedId || pendingFiles.value.length + 1,
           backendId: uploadedId,
@@ -1562,6 +1557,8 @@ async function confirmUpload() {
           fileShortName: "对比",
           uploader: "当前用户",
           uploadTime: new Date().toLocaleString("zh-CN"),
+          base_url: uploadResult.base_url || "",
+          signed_url: uploadResult.url || "",
         });
         console.log("🔍 对比文件上传成功，comparisonPage将作为字段提交");
       } else {
@@ -1887,10 +1884,6 @@ async function onSave() {
   }
 }
 
-function triggerXmlFileSelect() {
-  xmlFileInputRef.value?.click();
-}
-
 function getFileNameFromDisposition(disposition) {
   if (!disposition) return "essence-xml.zip";
 
@@ -1952,14 +1945,22 @@ function buildStatementXmlPayload() {
 }
 
 function buildStatementXmlFiles() {
-  return statementFiles.value
+  // 合并 statementFiles 和 additionalFiles 中的文件
+  const allFiles = [...statementFiles.value, ...additionalFiles.value];
+  
+  return allFiles
     .map((item, index) => {
       const fileUrl = normalizeRemoteUrl(item.fileUrl || item.url || "");
-      if (!fileUrl) return null;
+      const baseUrl = item.base_url || "";
+      const signedUrl = item.signed_url || item.url || "";
+      
+      if (!fileUrl && !baseUrl && !signedUrl) return null;
 
       return {
         file: fileUrl,
         name: item.fileTitle || item.fileCategory || item.fileName || `陈述文件${index + 1}`,
+        base_url: baseUrl,
+        url: signedUrl,
       };
     })
     .filter(Boolean);
@@ -1973,7 +1974,7 @@ function getComparisonPageUrl() {
   return normalizeRemoteUrl(firstAdditionalFile?.fileUrl || firstAdditionalFile?.url || "");
 }
 
-async function uploadXmlAndDownloadZip(file) {
+async function uploadXmlAndDownloadZip() {
   const { caseId } = getParamsFromUrl();
   if (!caseId) {
     ElMessage.error("地址栏缺少 case_id，无法启动转档XML");
@@ -2094,21 +2095,12 @@ async function uploadXmlAndDownloadZip(file) {
     ElMessage.error(error.message || "XML 转档失败");
   } finally {
     isXmlTransforming.value = false;
-    if (xmlFileInputRef.value) {
-      xmlFileInputRef.value.value = "";
-    }
   }
 }
 
-async function handleXmlFileSelect(event) {
-  const file = event.target?.files?.[0];
-  if (!file) return;
-  await uploadXmlAndDownloadZip(file);
-}
-
 // 提交表单
-function submitForm() {
-  triggerXmlFileSelect();
+async function submitForm() {
+  await uploadXmlAndDownloadZip();
 }
 
 // 处理表单提交
@@ -2183,7 +2175,7 @@ async function handleFileChange(file, type) {
           comparisonFile.value = fileNameToUrl[file.name] || "";
           comparisonFileName.value = file.name;
 
-          // 保存文件信息，包括URL
+          // 保存文件信息，包括URL、base_url和signed_url
           const fileItem = {
             id: uploadResult.data?.id || additionalFiles.value.length + 1,
             backendId: uploadResult.data?.id || null,
@@ -2195,6 +2187,8 @@ async function handleFileChange(file, type) {
             uploader: "当前用户",
             uploadTime: new Date().toLocaleString("zh-CN"),
             fileUrl: fileNameToUrl[file.name] || "", // 保存文件URL
+            base_url: uploadResult.base_url || "", // 保存base_url
+            signed_url: uploadResult.url || "", // 保存带签名的url
             uploadMode: "修订模式",
           };
 
@@ -2206,6 +2200,10 @@ async function handleFileChange(file, type) {
             file.name,
             "URL:",
             fileNameToUrl[file.name],
+            "base_url:",
+            uploadResult.base_url,
+            "signed_url:",
+            uploadResult.url,
             "将作为comparisonPage字段提交",
           );
         } else if (uploadMode.value === "替换页模式") {
@@ -2246,6 +2244,8 @@ async function handleFileChange(file, type) {
             uploader: "当前用户",
             uploadTime: new Date().toLocaleString("zh-CN"),
             fileUrl: fileNameToUrl[file.name] || "", // 保存文件URL
+            base_url: uploadResult.base_url || "", // 保存base_url
+            signed_url: uploadResult.url || "", // 保存带签名的url
             uploadMode: "替换页模式",
           };
 
@@ -2262,6 +2262,8 @@ async function handleFileChange(file, type) {
             uploader: "当前用户",
             uploadTime: new Date().toLocaleString("zh-CN"),
             fileUrl: fileNameToUrl[file.name] || "",
+            base_url: uploadResult.base_url || "",
+            signed_url: uploadResult.url || "",
           });
 
           console.log(
@@ -2271,6 +2273,10 @@ async function handleFileChange(file, type) {
             fileType,
             "URL:",
             fileNameToUrl[file.name],
+            "base_url:",
+            uploadResult.base_url,
+            "signed_url:",
+            uploadResult.url,
           );
 
           // 替换模式下，comparisonPage使用URL
@@ -2299,6 +2305,8 @@ async function handleFileChange(file, type) {
             uploader: "当前用户",
             uploadTime: new Date().toLocaleString("zh-CN"),
             uploadMode: "修订模式",
+            base_url: uploadResult.base_url || "",
+            signed_url: uploadResult.url || "",
           });
         }
       }
