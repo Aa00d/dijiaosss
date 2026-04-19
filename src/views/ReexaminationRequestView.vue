@@ -1,7 +1,6 @@
 <template>
   <div class="reexamination-request">
     <h2>复审请求100901</h2>
-
     <div class="btn-group">
       <el-button type="primary" @click="saveData">保存</el-button>
       <el-button type="primary" @click="saveData">提交</el-button>
@@ -270,8 +269,10 @@
                   </template>
                 </el-table-column>
               </el-table>
+            </div>
 
-              <!-- 附件类型选择和添加按钮 -->
+            <!-- 添加无效宣告理由证据 -->
+            <div class="section">
               <div class="attachment-section">
                 <el-form :model="attachmentForm" label-width="auto">
                   <el-row :gutter="20" align="middle">
@@ -338,10 +339,6 @@
                   </el-row>
                 </el-form>
               </div>
-            </div>
-
-            <!-- 添加无效宣告理由证据 -->
-            <div class="section">
               <el-table :data="evidenceFiles" style="width: 100%">
                 <el-table-column prop="index" label="序号" width="80"></el-table-column>
                 <el-table-column
@@ -865,41 +862,11 @@ const idQueryForm = reactive({
 });
 
 // 表格数据
-const opinionStatements = ref([
-  {
-    index: 1,
-    fileName: "无效理由.doc",
-    fileCategory: "专利撰写文件",
-    fileTitle: "意见陈述书",
-    fileShortName: "",
-    uploader: "",
-    uploadTime: "",
-  },
-]);
+const opinionStatements = ref([]);
 
-const evidenceFiles = ref([
-  {
-    index: 1,
-    fileName: "证明.pdf",
-    fileCategory: "专利撰写文件",
-    fileTitle: "意见陈述书",
-    fileShortName: "",
-    uploader: "",
-    uploadTime: "",
-  },
-]);
+const evidenceFiles = ref([]);
 
-const pendingFiles = ref([
-  {
-    index: 1,
-    fileName: "一种书写的专利文件的文件.doc",
-    fileType: "专利撰写文件",
-    fileTitle: "专利新申请五书",
-    fileShortName: "新五书",
-    uploader: "张三",
-    uploadTime: "2025-04-05 10:30",
-  },
-]);
+const pendingFiles = ref([]);
 
 const processedFiles = ref<any[]>([]);
 
@@ -996,12 +963,11 @@ async function queryOpinionStatements() {
 
     console.log("查询到的文件列表：", fileList);
 
-    // 筛选出复审意见陈述文件（internal_code === 'B100012' 且文件名称是"登记材料"）
+    // 筛选出复审意见陈述文件（internal_code === 'B100012'）
     const opinionStatementFiles = fileList.filter((file: any) => {
       const internalCode = file.internal_code || file.internalCode || file.internalCodeValue || "";
-      const fileTitle = file.fileCategoryMajor || file.file_description || file.description || "";
-      // 只显示文件名称是"登记材料"的文件
-      return internalCode === "B100012" && fileTitle === "登记材料";
+      // 只显示 internal_code 为 B100012 的文件
+      return internalCode === "B100012";
     });
 
     // 更新意见陈述表格数据
@@ -1137,15 +1103,13 @@ async function queryFiles() {
 
     console.log("查询到的文件列表：", fileList);
 
-    // 筛选出附件文件（排除文件名称是"登记材料"的文件，避免与第一个表格重复）
+    // 筛选出附件文件（排除 internal_code 为 B100012 的文件和 special 为 666 的文件）
     const attachmentFiles = fileList.filter((file: any) => {
-      const fileTitle = file.fileCategoryMajor || file.file_description || file.description || "";
-      const fileName = file.fileName || file.original_filename || file.file_name || file.name || "";
-      const lowerName = fileName.toLowerCase();
+      const internalCode = file.internal_code || file.internalCode || file.internalCodeValue || "";
       // 获取special字段，可能是字符串或数字
       const special = String(file.special || file.special_code || "");
-      // 排除文件名称是"登记材料"的文件，以及 special 为 666 的文件（已转档文件）
-      return fileTitle !== "登记材料" && special !== "666";
+      // 排除 internal_code 为 B100012 的文件，以及 special 为 666 的文件（已转档文件）
+      return internalCode !== "B100012" && special !== "666";
     });
 
     // 筛选出已转档文件（special === '666' 或 666）
@@ -1568,7 +1532,13 @@ const confirmAttachmentUpload = async () => {
         typeVal === "修改对照页docx" ? "修改对照页" : typeVal || attachmentSelectedName.value || "";
 
       const uploadedUrl =
-        (result && (result.url || result.fileUrl || (result.data && result.data.url))) || "";
+        (result &&
+          (result.base_url ||
+            result.url ||
+            result.fileUrl ||
+            (result.data && result.data.base_url) ||
+            (result.data && result.data.url))) ||
+        "";
       // 兜底：若接口未返回URL，则尝试从最新查询到的文件表格中取最后一条的fileUrl
       let finalUrl = uploadedUrl;
       try {
@@ -1764,7 +1734,14 @@ const confirmUpload = async () => {
       const uploadedUrl =
         (result && (result.url || result.fileUrl || (result.data && result.data.url))) || "";
       if (uploadedUrl) {
-        statementFileUrl.value = uploadedUrl;
+        statementFileUrl.value =
+          (result &&
+            (result.base_url ||
+              result.url ||
+              result.fileUrl ||
+              (result.data && result.data.base_url) ||
+              (result.data && result.data.url))) ||
+          "";
         console.log("复审意见陈述文件URL记录成功：", statementFileUrl.value);
       } else {
         console.warn("复审意见陈述上传响应未包含URL，尝试从查询结果推断");
@@ -1986,17 +1963,27 @@ const submitRecheckRequest = async () => {
     };
     fd.append("improperString", JSON.stringify(improperJson));
 
+    // 构建新的请求参数格式
+    const recheckRequestData = {
+      statement: statementRef,
+      proveAndEvidenceFile: proveAndEvidenceFiles.value.map((file: any, index: number) => ({
+        file: file.url,
+        name: reexaminationData.attachmentType || `证据${index + 1}`,
+      })),
+      recheckString: JSON.stringify({
+        proposers: reexaminationData.proposers || [],
+        agents: reexaminationData.agents || [],
+      }),
+      case_id: currentIds.case_id || 0,
+      rejectDate: reexaminationData.deadlineDate || new Date().toISOString().split("T")[0],
+    };
+
     // 控制台打印便于排查
-    console.group("🧾 复审请求XML(对齐意见陈述) FormData");
-    const curlParts: string[] = [];
-    (fd as any).forEach((val: any, key: string) => {
-      const v = String(val).replace(/"/g, '\\"');
-      curlParts.push(`-F "${key}=${v}"`);
-      console.log(`${key}:`, val);
-    });
-    const apiUrl = "http://47.108.144.113:9111/api/word/improper/xml";
-    console.log("cURL 复现命令:", `curl -X POST ${apiUrl} ${curlParts.join(" ")}`);
+    console.group("🧾 复审请求XML(新格式) 参数");
+    console.log("请求参数:", recheckRequestData);
     console.groupEnd();
+
+    const apiUrl = "http://47.108.144.113:9111/api/word/recheck/xml";
 
     // 提交到与意见陈述页相同的XML接口
     // 注意：使用 XMLHttpRequest 可以避免浏览器的自动下载行为
@@ -2005,14 +1992,8 @@ const submitRecheckRequest = async () => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", apiUrl, true);
 
-    // 必须在 open 之后、send 之前调用 overrideMimeType
-    // 覆盖 MIME 类型为通用的二进制流，避免浏览器识别为可下载文件
-    try {
-      xhr.overrideMimeType("application/octet-stream; charset=x-user-defined");
-    } catch (e) {
-      // 某些浏览器可能不支持 overrideMimeType，忽略错误
-      console.warn("overrideMimeType not supported:", e);
-    }
+    // 设置请求头为 JSON
+    xhr.setRequestHeader("Content-Type", "application/json");
 
     // 设置响应类型为 arraybuffer，这样浏览器不会将其识别为可下载文件
     xhr.responseType = "arraybuffer";
@@ -2134,8 +2115,8 @@ const submitRecheckRequest = async () => {
       // 设置超时时间
       xhr.timeout = 60000; // 60秒
 
-      // 发送请求
-      xhr.send(fd);
+      // 发送 JSON 数据
+      xhr.send(JSON.stringify(recheckRequestData));
     });
   } catch (err: any) {
     console.error("提交异常:", err);
