@@ -709,7 +709,7 @@
         <el-tab-pane label="待转档文件" name="pending-content">
           <div class="tab-content">
             <div class="btn-group">
-              <el-button type="primary" @click="submitNewApplication">启动转档XML</el-button>
+              <el-button type="primary" @click="startPendingXmlConversion">启动转档XML</el-button>
               <el-button
                 type="primary"
                 :disabled="pendingFiles.length > 0"
@@ -1732,6 +1732,7 @@ const resetCaseData = () => {
   });
 
   pendingFiles.value = [];
+  pendingUploadFile.value = null;
   processedFiles.value = [];
   processFlow.value = [];
 };
@@ -1790,23 +1791,16 @@ const switchTab = (tabId: TabType | string): void => {
 // 文件上传相关
 const uploading = ref(false);
 const uploadProgress = ref(0);
+const pendingUploadFile = ref<File | null>(null);
 
 // 触发文件上传对话框
 const triggerFileUpload = () => {
   fileInput.value?.click();
 };
 
-// 待转档文件上传处理函数（使用InternalCode.js，URL带案件ID和处理事项ID）
-const handleFileUpload = async (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  const files = target.files;
-  if (!files || files.length === 0) return;
-
-  // 检查是否已有文件：待转档文件只能上传一个文件
-  if (pendingFiles.value.length > 0) {
-    ElMessage.warning("待转档文件只能上传一个文件。请先删除现有文件后再上传新文件。");
-    // 清空输入值
-    target.value = "";
+const startPendingXmlConversion = async () => {
+  if (!pendingUploadFile.value) {
+    ElMessage.warning("请先上传待转档文件");
     return;
   }
 
@@ -1814,170 +1808,169 @@ const handleFileUpload = async (event: Event) => {
   uploadProgress.value = 0;
 
   try {
-    const fileArray = Array.from(files);
+    const file = pendingUploadFile.value;
+    const currentUrl = new URL(window.location.href);
+    const caseIdValue = String(currentUrl.searchParams.get("case_id") || "").trim();
 
-    // 限制只能上传一个文件
-    if (fileArray.length > 1) {
-      ElMessage.warning("待转档文件只能上传一个文件，已自动选择第一个文件");
-      // 只保留第一个文件
-      fileArray.splice(1);
-    }
-
-    // 检查文件格式：只允许上传 .docx 文件
-    const invalidFiles = fileArray.filter((file) => {
-      const fileName = file.name.toLowerCase();
-      return !fileName.endsWith(".docx");
-    });
-
-    if (invalidFiles.length > 0) {
-      const invalidFileNames = invalidFiles.map((f) => f.name).join("、");
-      ElMessage.error(`只能上传 .docx 格式的文件。以下文件格式不正确：${invalidFileNames}`);
-      // 清空输入值
-      target.value = "";
-      uploading.value = false;
+    if (!caseIdValue) {
+      ElMessage.error("地址栏缺少 case_id，无法启动转档XML");
       return;
     }
 
-    const urlParams = getUrlParamsWithDefaults();
+    const petitionPayload = buildPetitionPayload();
+    const powerAttorneyPayload = buildPowerAttorneyPayload();
+    const patentApplicationPayload = buildFunctionalPayload();
+    const newApplicationPayload = {
+      businessType: Number(requestContent.businessType ?? 1),
+      fileType: Number(requestContent.fileType ?? 0),
+    };
 
-    // 获取 submission_page 参数（当前页面是实用页面，固定使用"实用"）
-    const submissionPage = "实用";
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("petitionString", JSON.stringify(petitionPayload));
+    fd.append("powerAttorneyString", JSON.stringify(powerAttorneyPayload));
+    fd.append("patentApplicationString", JSON.stringify(patentApplicationPayload));
+    fd.append("newApplicationString", JSON.stringify(newApplicationPayload));
+    fd.append("case_id", caseIdValue);
 
-    console.log("📤 开始上传待转档文件（使用InternalCode，URL带参数）:", {
-      文件数量: fileArray.length,
-      case_processes_id: urlParams.caseProcessesId,
-      case_id: urlParams.caseId,
-      submission_page: submissionPage,
+    const requestUrl = `${API_BASE_URL}/api/word/xml?case_id=${encodeURIComponent(caseIdValue)}`;
+
+    console.log("📤 启动转档XML，调用新转档接口:", {
+      requestUrl,
+      fileName: file.name,
+      fileSize: file.size,
+      case_id: caseIdValue,
+      petitionString: petitionPayload,
+      powerAttorneyString: powerAttorneyPayload,
+      patentApplicationString: patentApplicationPayload,
+      newApplicationString: newApplicationPayload,
     });
 
-    // 使用InternalCode.js的上传函数上传所有文件
-    // 注意：待转档文件可能需要一个默认的内部代码，或者需要用户选择文件类型
-    // 这里先使用一个通用的内部代码，如果需要可以根据文件类型选择
-    const defaultInternalCode = "B100001"; // 默认使用权利要求书的内部代码，可以根据实际情况调整
-
-    const results = await Promise.all(
-      fileArray.map(async (file) => {
-        const result = await uploadFileWithInternalCode({
-          file: file,
-          case_processes_id: urlParams.caseProcessesId,
-          case_id: urlParams.caseId,
-          submission_page: submissionPage,
-          special: "3", // 待转档文件使用 special: '3'
-          internal_code: defaultInternalCode,
-          useUrlParams: true, // 使用URL参数传递案件ID和处理事项ID
-        } as any);
-        return result;
-      }),
-    );
-
-    // 处理上传结果并保存URL
-    const successCount = results.filter((r: any) => r?.success).length;
-    const failedCount = results.length - successCount;
-
-    // 收集上传成功文件的URL，并添加到文件列表
-    const uploadedUrls: string[] = [];
-    results.forEach((result: any, index: number) => {
-      if (result?.success && result?.data) {
-        const data = result.data;
-
-        // 重要：从后端返回的数据中提取URL（优先使用 data.url，其次使用 data.base_url）
-        // file字段对应待转档文件上传后返回的URL
-        // 逻辑：上传文件成功后，后端返回一个URL，直接抓取这个完整URL放在file字段下面
-        let url = data.url || data.base_url || "";
-
-        if (url) {
-          // 移除查询参数，保留完整URL（包含协议和域名）
-          url = url.split("?")[0].trim();
-
-          // 确保URL包含协议前缀
-          if (!url.startsWith("http://") && !url.startsWith("https://")) {
-            url = "https://" + url;
-          } else if (url.startsWith("http://")) {
-            // 将http://改为https://
-            url = url.replace(/^http:\/\//, "https://");
-          }
-
-          uploadedUrls.push(url);
-          // 添加到pendingFileUrls数组（避免重复）
-          if (url && !pendingFileUrls.value.includes(url)) {
-            pendingFileUrls.value.push(url);
-            console.log("✅ 待转档文件URL已添加到 pendingFileUrls (完整URL格式):", url);
-          }
-        }
-
-        // 将上传成功的文件添加到pendingFiles列表显示
-        const fileUrl = data.url || data.base_url || "";
-      const uploadedFileId = getUploadedFileId(data, `${Date.now()}-${index}`);
-      console.log(" 待转档文件上传返回的数据:", {
-        id: uploadedFileId,
-        rawId: data.id,
-        fileId: data.fileId,
-        file_id: data.file_id,
-        file_name: data.file_name,
-      });
-
-      const fileInfo: FileInfo = {
-          id: uploadedFileId, // 优先使用后端返回的真实ID
-          fileName: data.file_name || fileArray[index].name,
-          fileType: data.file_type || data.file_sub_type || "未知类型",
-          fileTitle: data.file_title || data.file_name || fileArray[index].name,
-          fileShortName: data.file_short_name || data.file_abbreviation || "",
-          uploader: data.uploader || data.upload_person || "当前用户",
-          uploadTime:
-            data.createTime ||
-            data.upload_time ||
-            new Date().toLocaleString("zh-CN", {
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          url: fileUrl, // 保存文件URL，用于删除时从pendingFileUrls中移除
-        };
-
-        // 检查是否已存在（避免重复添加）
-        const exists = pendingFiles.value.some(
-          (f) => f.id === fileInfo.id || f.fileName === fileInfo.fileName,
-        );
-        if (!exists) {
-          pendingFiles.value.push(fileInfo);
-          console.log(" 文件已添加到待转档文件列表:", fileInfo.fileName);
-        } else {
-          console.log(" 文件已存在，跳过添加:", fileInfo.fileName);
-        }
-      }
+    const response = await fetch(requestUrl, {
+      method: "POST",
+      body: fd,
     });
 
-    console.log(" 已保存待转档文件URL:", uploadedUrls);
-    console.log(" 当前pendingFileUrls数组:", pendingFileUrls.value);
-
-    if (successCount === fileArray.length) {
-      ElMessage.success(`成功上传${successCount}个待转档文件到服务器`);
-
-      // 尝试从后端刷新文件列表（如果caseId存在），但已显示的文件不会丢失
-      if (caseId.value) {
-        try {
-          await loadPendingFiles();
-        } catch (err) {
-          console.warn("从后端刷新文件列表失败，但已显示上传的文件:", err);
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status} ${response.statusText}`;
+      try {
+        const errorText = await response.text();
+        if (errorText) {
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorMessage = errorJson.message || errorJson.msg || errorJson.error || errorMessage;
+          } catch {
+            errorMessage = errorText;
+          }
         }
+      } catch {
+        // ignore
       }
-    } else {
-      ElMessage.warning(`部分文件上传成功: ${successCount}/${fileArray.length}`);
-      if (failedCount > 0) {
-        const failedResults = results.filter((r: any) => !r?.success);
-        const errorMsg = (failedResults[0] as any)?.error || "未知错误";
-        ElMessage.error(`上传失败: ${errorMsg}`);
-      }
+      throw new Error(errorMessage);
     }
+
+    const blob = await response.blob();
+    const contentType = response.headers.get("content-type") || "";
+
+    if (
+      contentType.includes("application/json") ||
+      contentType.includes("text/plain") ||
+      blob.size === 0
+    ) {
+      const text = await blob.text();
+      if (text) {
+        try {
+          const json = JSON.parse(text);
+          throw new Error(json.message || json.msg || json.error || "转档失败");
+        } catch {
+          throw new Error(text);
+        }
+      }
+      throw new Error("转档失败：后端未返回 zip 文件");
+    }
+
+    const disposition = response.headers.get("content-disposition") || "";
+    let downloadFileName = `${file.name.replace(/\.[^.]+$/, "") || "转档结果"}.zip`;
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const normalMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
+    if (utf8Match?.[1]) {
+      downloadFileName = decodeURIComponent(utf8Match[1]);
+    } else if (normalMatch?.[1]) {
+      downloadFileName = decodeURIComponent(normalMatch[1].replace(/['"]/g, ""));
+    }
+
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = downloadFileName;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
+
+    ElMessage.success("转档成功，zip 文件已开始下载");
   } catch (err: any) {
-    console.error("待转档文件上传失败:", err);
-    ElMessage.error(`待转档文件上传失败: ${err?.message || "未知错误"}`);
+    console.error("启动转档XML失败:", err);
+    ElMessage.error(`启动转档XML失败: ${err?.message || "未知错误"}`);
   } finally {
     uploading.value = false;
     uploadProgress.value = 0;
-    // 清空文件输入，允许重复选择同一文件
+  }
+};
+
+// 待转档文件上传处理函数：只选择文件并展示到列表
+const handleFileUpload = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const files = target.files;
+  if (!files || files.length === 0) return;
+
+  if (pendingFiles.value.length > 0) {
+    ElMessage.warning("待转档文件只能上传一个文件。请先删除现有文件后再上传新文件。");
+    target.value = "";
+    return;
+  }
+
+  try {
+    const fileArray = Array.from(files);
+    const file = fileArray[0];
+
+    if (fileArray.length > 1) {
+      ElMessage.warning("待转档文件只能上传一个文件，已自动选择第一个文件");
+    }
+
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith(".docx")) {
+      ElMessage.error(`只能上传 .docx 格式的文件。当前文件格式不正确：${file.name}`);
+      target.value = "";
+      return;
+    }
+
+    pendingUploadFile.value = file;
+
+    const fileInfo: FileInfo = {
+      id: `${Date.now()}`,
+      fileName: file.name,
+      fileType: file.type || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      fileTitle: file.name,
+      fileShortName: file.name,
+      uploader: "当前用户",
+      uploadTime: new Date().toLocaleString("zh-CN", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      url: "",
+    };
+
+    pendingFiles.value = [fileInfo];
+    ElMessage.success("待转档文件已选择，可点击“启动转档XML”开始转档");
+  } catch (err: any) {
+    console.error("待转档文件选择失败:", err);
+    ElMessage.error(`待转档文件选择失败: ${err?.message || "未知错误"}`);
+  } finally {
     target.value = "";
   }
 };
@@ -2478,6 +2471,7 @@ const removePendingFile = async (index: number) => {
 
       // 从列表中删除
       pendingFiles.value.splice(index, 1);
+      pendingUploadFile.value = null;
 
       // 同时从 pendingFileUrls 中删除对应的 URL
       // 需要找到对应的 URL 并删除（URL已经移除了协议前缀）
@@ -2511,6 +2505,7 @@ const removePendingFile = async (index: number) => {
     } else {
       // 如果没有ID，只从列表中删除（可能是未上传成功的文件）
       pendingFiles.value.splice(index, 1);
+      pendingUploadFile.value = null;
       // 尝试从 pendingFileUrls 中删除（如果有URL信息）
       if (file.url) {
         let url = file.url.replace(/^https?:\/\//, "");

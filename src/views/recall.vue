@@ -1786,7 +1786,7 @@ const downloadFile = async (file) => {
     const fileId = file?.id || file?.rawFile?.id;
     if (!fileId) throw new Error("文件ID不可用");
 
-    const downloadUrl = `http://v9665bb7.natappfree.cc/api/files/download?id=${fileId}`;
+    const downloadUrl = `http://t6ce5869.natappfree.cc/api/files/download?id=${fileId}`;
     const response = await fetch(downloadUrl);
     if (!response.ok) throw new Error(`下载失败: ${response.status}`);
 
