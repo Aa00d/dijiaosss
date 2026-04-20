@@ -23,6 +23,7 @@ import SubmissionView from '../views/SubmissionView.vue'
 import Submission from '../views/SubmissionOffice.vue'
 import Submissionimport from '../views/Submissionimport.vue'
 import CompletedView from '../views/CompletedView.vue'
+import InReviewView from '../views/InReviewView.vue'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -76,6 +77,8 @@ const router = createRouter({
          { path: '/patent-import', name: 'patent-import', component: Submissionimport },
            // 已完成
     { path: '/completed', name: 'completed', component: CompletedView },
+               // 审核中
+    { path: '/in-review', name: 'in-review-view', component: InReviewView },
   ]
 })
 
