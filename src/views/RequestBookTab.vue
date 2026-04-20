@@ -1887,17 +1887,14 @@ const onSubmit = async () => {
         ) {
           fd.append("images", img.url);
           console.log("已添加本地图片URL:", img.url);
+          imagesAdded = true;
         }
       });
     }
 
-    // 3. 最后，如果仍然没有图片，添加兜底值
+    // 3. 最后，如果仍然没有图片，则不传 images
     if (!imagesAdded) {
-      console.warn("无法获取图片文件，使用兜底值");
-      fd.append(
-        "images",
-        "https://ruidao123.oss-cn-beijing.aliyuncs.com/cases/1001/图片/测试图片.jpg",
-      );
+      console.log("未找到可用图片文件，本次不传 images");
     }
 
     // 处理附件文件 - 对应后端参数 fileAttached (可选) - 附加文件OSS地址列表 (对应第2105-2106行的附件上传按钮)
@@ -1953,6 +1950,7 @@ const onSubmit = async () => {
           if (!isSpecial666) {
             fd.append("fileAttached", file.url);
             console.log("已添加本地附件URL:", file.url);
+            attachmentsAdded = true;
           } else {
             console.log("排除special为666的文件:", file.fileName);
           }
@@ -1960,13 +1958,9 @@ const onSubmit = async () => {
       });
     }
 
-    // 3. 最后，如果仍然没有附件，添加兜底值
+    // 3. 最后，如果仍然没有附件，则不传 fileAttached
     if (!attachmentsAdded) {
-      console.warn("无法获取附件文件，使用兜底值");
-      fd.append(
-        "fileAttached",
-        "https://ruidao123.oss-cn-beijing.aliyuncs.com/cases/1001/附件/测试附件.pdf",
-      );
+      console.log("未找到可用附件文件，本次不传 fileAttached");
     }
 
     // 记录提交的文件数量统计
@@ -1994,26 +1988,129 @@ const onSubmit = async () => {
     fd.append("petitionSqlString", petitionSqlStr);
 
     // XML生成接口使用不同的服务器
-    const url = "http://47.108.144.113:9111/api/word/xml";
+    const currentUrl = new URL(window.location.href);
+    const caseIdFromUrl = String(currentUrl.searchParams.get("case_id") || "").trim();
+
+    if (!caseIdFromUrl) {
+      throw new Error("地址栏缺少 case_id");
+    }
+
+    fd.append("case_id", caseIdFromUrl);
+    fd.append("caseId", caseIdFromUrl);
+
+    const url = `http://47.108.144.113:9111/api/word/xml?case_id=${encodeURIComponent(caseIdFromUrl)}&caseId=${encodeURIComponent(caseIdFromUrl)}`;
+    console.log("🚀 提交 XML 接口地址:", url);
+    console.log("🚀 提交 XML 的 case_id:", caseIdFromUrl);
+
     const res = await fetch(url, { method: "POST", body: fd });
     if (!res.ok) {
       const txt = await res.text();
       throw new Error(`提交失败: ${res.status} ${txt}`);
     }
-    // 先读取blob数据，因为Response流只能读取一次
-    const blob = await res.blob();
-    // 从blob创建ArrayBuffer
-    const buffer = await blob.arrayBuffer();
-    // 移除zipData赋值，避免文件显示在已转档tab中
 
-    // 将二进制数据直接上传，不再下载
-    const arrayBuffer = await blob.arrayBuffer();
+    const contentType = res.headers.get("content-type") || "";
+    const disposition = res.headers.get("content-disposition") || "";
+    console.log("📦 XML接口响应头:", {
+      contentType,
+      disposition,
+      status: res.status,
+    });
+
+    // 如果后端返回的是JSON或文本，优先按错误信息处理
+    if (contentType.includes("application/json") || contentType.includes("text/plain")) {
+      const text = await res.text();
+      console.error("❌ XML接口返回的不是zip，而是文本/JSON:", text);
+      throw new Error(text || "后端未返回zip文件");
+    }
+
+    // 先读取 blob，一份用于直接下载，一份转成二进制继续走现有上传逻辑
+    const blob = await res.blob();
+
+    if (!blob || blob.size === 0) {
+      throw new Error("后端返回的zip文件为空");
+    }
+
+    // 再次兜底校验：有些后端 content-type 不准，但会把错误文本塞进 blob
+    if (
+      contentType &&
+      !contentType.includes("zip") &&
+      !contentType.includes("octet-stream")
+    ) {
+      try {
+        const text = await blob.text();
+        if (text && (text.startsWith("{") || text.startsWith("[") || text.includes("message"))) {
+          console.error("❌ blob内容看起来不是zip，而是文本:", text);
+          throw new Error(text);
+        }
+      } catch (blobTextErr) {
+        if (blobTextErr instanceof Error) {
+          throw blobTextErr;
+        }
+      }
+    }
+
+    let downloadFileName = "请求书转档结果.zip";
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const normalMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
+    if (utf8Match?.[1]) {
+      downloadFileName = decodeURIComponent(utf8Match[1]);
+    } else if (normalMatch?.[1]) {
+      downloadFileName = decodeURIComponent(normalMatch[1].replace(/['"]/g, ""));
+    }
+
+    console.log("🆕 RequestBookTab 下载逻辑版本: v2-window-open-fallback");
+
+    const downloadBlob = new Blob([blob], { type: contentType || "application/zip" });
+    const downloadUrl = URL.createObjectURL(downloadBlob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = downloadFileName;
+    link.style.display = "none";
+    document.body.appendChild(link);
+
+    const clickEvent = new MouseEvent("click", {
+      view: window,
+      bubbles: true,
+      cancelable: true,
+    });
+    link.dispatchEvent(clickEvent);
+
+    // 某些浏览器对 blob download 不稳定，再补一次 window.open 兜底
+    setTimeout(() => {
+      try {
+        window.open(downloadUrl, "_blank", "noopener,noreferrer");
+        console.log("🪟 已执行 window.open 下载兜底");
+      } catch (openErr) {
+        console.warn("window.open 下载兜底失败:", openErr);
+      }
+    }, 300);
+
+    setTimeout(() => {
+      try {
+        document.body.removeChild(link);
+      } catch {
+        // ignore
+      }
+      URL.revokeObjectURL(downloadUrl);
+    }, 5000);
+
+    console.log("✅ 已强制触发 ZIP 下载:", {
+      downloadFileName,
+      size: downloadBlob.size,
+      contentType: contentType || "application/zip",
+      downloadUrl,
+    });
+
+    ElMessage.success(`ZIP 已开始下载：${downloadFileName}`);
+
+    // 将二进制数据继续上传，保留现有逻辑
+    const arrayBuffer = await downloadBlob.arrayBuffer();
     // 获取case_processes_id和case_id，优先使用caseInfo中的数据
     const urlParams = getParamsFromUrl();
     const caseProcessesId = urlParams.caseProcessesId || caseInfo.value?.processItemId || "";
     const caseId = urlParams.caseId || caseInfo.value?.caseId || "";
 
-    await useUploadZipBytes({
+    const uploadResult = await useUploadZipBytes({
       arrayBuffer,
       caseId: caseId,
       caseProcessesId: caseProcessesId,
@@ -2021,8 +2118,11 @@ const onSubmit = async () => {
       // baseUrl默认为'http://47.108.144.113:9111'
     });
 
-    // 显示提交成功
-    ElMessage.success("提交成功，文件已上传");
+    if (uploadResult?.success) {
+      ElMessage.success("提交成功，zip 已下载并上传");
+    } else {
+      ElMessage.success("zip 已下载");
+    }
 
     // 延迟弹出删除弹窗，让用户看到提交成功的消息
     setTimeout(() => {

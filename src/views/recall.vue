@@ -201,7 +201,7 @@
         <el-tab-pane label="待转档文件" name="pending-content">
           <div class="tab-content">
             <div style="margin-bottom: 20px">
-              <el-button @click="submitForm">启动转档XML</el-button>
+              <el-button @click="submitRevocationXml">启动转档XML</el-button>
             </div>
             <el-table :data="pendingFiles" style="width: 100%">
               <el-table-column prop="index" label="序号" width="80"></el-table-column>
@@ -318,6 +318,7 @@ interface FileItem {
   uploader: string; // 上传人员
   upload_time: string; // 上传时间
   operation: string; // 操作
+  url?: string; // 文件URL
   raw?: File; // 本地选择的原始文件（用于MultipartFile）
 }
 
@@ -487,6 +488,7 @@ const queryFiles = async (force: boolean = false) => {
             uploader: "未知用户",
             upload_time: file.createTime || new Date().toISOString(),
             operation: "删除",
+            url: typeof file.url === "string" ? file.url : file.fileUrl || "",
           });
         });
 
@@ -500,6 +502,7 @@ const queryFiles = async (force: boolean = false) => {
           uploader: file.uploader,
           upload_time: file.upload_time,
           operation: file.operation,
+          url: file.url,
         }));
 
         ElMessage.success(`成功查询到 ${specialFiles.length} 个special为1的文件`);
@@ -756,6 +759,10 @@ const onImageSelected = async (e: Event) => {
           fileList.value[uploadedFileIndex].uploader = uploadResult.data.uploader || "当前用户";
           fileList.value[uploadedFileIndex].upload_time =
             uploadResult.data.upload_time || new Date().toISOString();
+          fileList.value[uploadedFileIndex].url =
+            typeof uploadResult.data.url === "string"
+              ? uploadResult.data.url
+              : uploadResult.data.fileUrl || "";
           console.log("文件上传成功并更新信息:", uploadResult.data);
         }
       } else {
@@ -776,6 +783,7 @@ const onImageSelected = async (e: Event) => {
     uploader: file.uploader,
     upload_time: file.upload_time,
     operation: file.operation,
+    url: file.url,
   }));
 
   if (addedCount > 0) {
@@ -786,202 +794,51 @@ const onImageSelected = async (e: Event) => {
   input.value = "";
 };
 
-const deriveBusinessType = (type: string) => {
-  const t = (type || "").toLowerCase();
-  if (t.includes("发明")) return 0;
-  if (t.includes("实用")) return 1;
-  if (t.includes("外观")) return 2;
-  return 2;
-};
-
-const buildMysqlString = () => {
-  return {
-    applicationNumber: recallForm.applicationNumber || "",
-    nameInvention: recallForm.caseName || "",
-    CustomerName: recallForm.customerName || "",
-    signature: recallForm.agency || "成都睿道智诚专利代理有限公司",
-    institutionCode: "51217",
-    internalNumber: recallForm.caseNumber || "PCN1252586",
-    businessType: deriveBusinessType(recallForm.applicationType),
-    fileType: 1,
-  };
-};
-
 const submitRevocationXml = async () => {
-  // 确保images字段传递的是字符串格式
-  console.log("🔍 开始处理images字段，确保传递字符串格式");
+  console.log("🔍 开始调用撤回专利XML接口");
 
-  const formData = new FormData();
-  // 初始化数组用于收集所有有效图片URL
-  const imageUrls = [];
-  console.log("🔍 初始化图片URL收集数组");
-
-  // 固定recordFilingNumber为888
-  const recordFilingNumber = "888";
-  formData.append("recordFilingNumber", recordFilingNumber);
-  console.log("✅ 设置recordFilingNumber:", recordFilingNumber);
-
-  // 使用buildMysqlString函数构建mysqlString参数
-  const mysqlStringObj = buildMysqlString();
-  formData.append("mysqlString", JSON.stringify(mysqlStringObj));
-  console.log("✅ 设置mysqlString:", JSON.stringify(mysqlStringObj));
-
-  // 添加images字段：确保always present in the request
-  let imageUrl = "https://example.com/placeholder.jpg"; // Default fallback URL
-  try {
-    const { processesId, caseId } = {
-      processesId: currentCaseProcessesId.value,
-      caseId: currentCaseId.value,
-    };
-    console.log("🔍 获取文件URL参数: processesId=", processesId, ", caseId=", caseId);
-
-    // 调用getFilesBySubmission接口获取文件列表
-    const filesResult = await getFilesBySubmission({
-      case_processes_id: processesId?.toString() || "2001",
-      case_id: caseId?.toString() || "1001",
-      submission_page: "撤回专利",
-    });
-
-    console.log("🔍 获取文件列表结果类型:", typeof filesResult);
-    console.log("🔍 获取文件列表结果结构:", Object.keys(filesResult || {}));
-
-    // 尝试多种可能的数据结构
-    let filesList = [];
-    if (filesResult && filesResult.files && Array.isArray(filesResult.files)) {
-      filesList = filesResult.files;
-      console.log("🔍 使用filesResult.files，长度:", filesList.length);
-    } else if (
-      filesResult &&
-      filesResult.data &&
-      filesResult.data.files &&
-      Array.isArray(filesResult.data.files)
-    ) {
-      filesList = filesResult.data.files;
-      console.log("🔍 使用filesResult.data.files，长度:", filesList.length);
-    } else if (filesResult && Array.isArray(filesResult)) {
-      filesList = filesResult;
-      console.log("🔍 直接使用filesResult数组，长度:", filesList.length);
-    }
-
-    // 打印文件列表详情
-    console.log("🔍 文件列表详情:", JSON.stringify(filesList.slice(0, 3))); // 只打印前3个避免日志过长
-
-    // 优化文件匹配逻辑：优先查找有URL且special为1的文件
-    const imageFile = filesList.find((f) => {
-      const minorCategory = f.fileCategoryMinor || f.file_category || "";
-      const fileName = f.fileName || f.file_name || "";
-      const hasUrl = f.url && typeof f.url === "string" && f.url.trim() !== "";
-      const isSpecial1 = f.special === "1" || f.special === 1;
-      console.log(
-        "🔍 检查文件:",
-        fileName,
-        "小类:",
-        minorCategory,
-        "有URL:",
-        hasUrl,
-        "special为1:",
-        isSpecial1,
-      );
-
-      return (
-        hasUrl &&
-        isSpecial1 &&
-        (fileName.includes("撤回声明") ||
-          fileName.includes("委托书") ||
-          minorCategory.includes("扫描件") ||
-          fileName.toLowerCase().match(/\.(jpg|jpeg|png|gif)$/) ||
-          minorCategory === "其他证明文件-扫描件（普通）")
-      );
-    });
-
-    // 收集所有有有效URL且special为1的文件，确保只提交special为1的数据
-    const allImagesWithUrls = filesList.filter(
-      (f) =>
-        f &&
-        f.url &&
-        typeof f.url === "string" &&
-        f.url.trim() !== "" &&
-        (f.special === "1" || f.special === 1),
-    );
-
-    if (allImagesWithUrls.length > 0) {
-      console.log(`✅ 找到${allImagesWithUrls.length}个有效图片URL`);
-      // 将所有URL添加到数组中
-      allImagesWithUrls.forEach((file, index) => {
-        const url = file.url.trim();
-        imageUrls.push(url);
-        console.log(
-          `✅ 添加图片${index + 1}: fileName=${file.fileName || file.file_name || "未知"}, URL=${url}`,
-        );
-      });
-
-      // 如果找到了匹配的理想文件，将其设置为主要imageUrl（保持向后兼容）
-      if (imageFile && imageFile.url && typeof imageFile.url === "string") {
-        imageUrl = imageFile.url.trim();
-        console.log(
-          "✅ 成功找到匹配文件: fileName=",
-          imageFile.fileName || imageFile.file_name,
-          ", URL=",
-          imageUrl,
-        );
-      } else if (allImagesWithUrls.length > 0) {
-        // 使用第一个URL作为默认URL（保持向后兼容）
-        imageUrl = allImagesWithUrls[0].url.trim();
-        console.log("⚠️  未找到理想文件，使用第一个有URL的文件:", imageUrl);
-      }
-    } else {
-      console.warn("⚠️  未找到任何有效文件URL");
-    }
-  } catch (imageError) {
-    console.error("❌ 获取文件列表失败:", imageError.message || imageError);
-    console.warn("⚠️  发生错误，使用默认URL");
+  if (!currentCaseId.value) {
+    ElMessage.warning("缺少案件ID，无法启动转档XML");
+    return;
   }
 
-  // 确保images字段always included in FormData
-  console.log("🔍 准备添加images字段，找到的URL数量:", imageUrls.length);
+  // 提取JPG图片的URL数组
+  const imageUrls = fileList.value
+    .filter((file) => file.file_abbreviation === "JPG" && file.url)
+    .map((file) => file.url);
 
-  // 删除旧的images字段（如果有）
-  formData.delete("images");
-  console.log("✅ 已删除旧的images字段");
+  if (imageUrls.length === 0) {
+    ElMessage.warning("请先上传撤回声明的JPG扫描件");
+    return;
+  }
 
-  // 如果找到了URL，使用所有URL；否则使用默认的单个URL（保持向后兼容）
-  const finalImagesArray = imageUrls.length > 0 ? imageUrls : [imageUrl];
+  const formData = new FormData();
 
-  // 以多个同名参数形式添加每个URL
-  console.log(`🔄 开始添加${finalImagesArray.length}个images参数...`);
-  finalImagesArray.forEach((url, index) => {
-    // 清理URL中的特殊字符
-    const cleanUrl = url.replace(/[`"']/g, "").trim();
-    formData.append("images", cleanUrl);
-    console.log(`✅ 已添加images参数${index + 1}:`, cleanUrl);
+  // 构造 recordFilingNumber JSON 字符串
+  const recordFilingNumberJson = JSON.stringify({
+    date: recallForm.issueDate || new Date().toISOString().split("T")[0],
+    businessType: 0,
+    case_id: currentCaseId.value,
   });
 
-  // 验证添加的参数数量
-  const addedImagesCount = formData.getAll("images").length;
-  console.log("✅ 成功添加的images参数总数:", addedImagesCount);
-  console.log("✅ 提交的所有images参数值:", formData.getAll("images"));
-
-  // 验证FormData包含images字段
-  const hasImagesField = formData.has("images");
-  const imagesValue = formData.get("images");
-  console.log("✅ images字段是否存在:", hasImagesField);
-  console.log("✅ images字段值:", imagesValue);
-  console.log("✅ images字段类型:", typeof imagesValue);
-
-  // Log FormData entries for debugging
-  const formDataEntries = [];
-  formData.forEach((value, key) => {
-    formDataEntries.push(`${key}: ${typeof value === "string" ? value : "Blob/File"}`);
+  // 按照接口要求构造参数
+  // images 字段在接口中是数组，formData.append 会多次添加
+  imageUrls.forEach((url) => {
+    formData.append("images", url || "");
   });
-  console.log("🔍 FormData完整内容:", formDataEntries);
+
+  formData.append("recordFilingNumber", recordFilingNumberJson);
+  formData.append("case_id", String(currentCaseId.value));
+
+  console.log("✅ 设置images:", imageUrls);
+  console.log("✅ 设置recordFilingNumber:", recordFilingNumberJson);
+  console.log("✅ 设置case_id:", String(currentCaseId.value));
 
   try {
     const url = "http://47.108.144.113:9111/api/word/revocation/xml";
-    // 期望后端返回zip文件，设置为blob
     const resp = await axios.post(url, formData, { responseType: "blob" });
     const blob = resp.data as Blob;
 
-    // 如果后端返回JSON错误，尝试解析并提示
     const contentType = (
       resp.headers?.["content-type"] ||
       resp.headers?.["Content-Type"] ||
@@ -1003,10 +860,9 @@ const submitRevocationXml = async () => {
       return;
     }
 
-    // 提取文件名（支持 filename*=UTF-8'' 与 filename="..." 两种格式）
     const disposition =
       resp.headers?.["content-disposition"] || resp.headers?.["Content-Disposition"] || "";
-    let filename = "撤回声明.zip";
+    let filename = "撤回声明请求.zip";
     const matchRFC = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
     const matchQuoted = /filename=\"?([^\";]+)\"?/i.exec(disposition);
     if (matchRFC && matchRFC[1]) {
@@ -1015,31 +871,7 @@ const submitRevocationXml = async () => {
       filename = decodeURIComponent(matchQuoted[1].trim());
     }
 
-    try {
-      // 从blob创建ArrayBuffer并赋值给zipData
-      const buffer = await blob.arrayBuffer();
-      zipData.value = buffer;
-
-      // 使用useUploadZipBytes接口上传zip二进制流到后端
-      const uploadResult = await useUploadZipBytes({
-        arrayBuffer: buffer,
-        caseProcessesId: currentCaseProcessesId.value,
-        caseId: currentCaseId.value,
-        submissionPage: "撤回专利",
-        uploadUrl: `${import.meta.env.VITE_API_BASE_URL}/files/upload-by-bytes`, // 直接设置完整的接口路径
-        timeout: 120000, // 2分钟超时，确保大文件有足够时间上传
-      });
-
-      if (uploadResult.success) {
-        ElMessage.success(
-          `撤回声明生成成功，已上传${uploadResult.uploaded_count || 0}个文件到后端`,
-        );
-      } else {
-        ElMessage.error(`上传失败: ${uploadResult.message || "未知错误"}`);
-      }
-    } catch (parseError) {
-      console.error("处理ZIP文件失败:", parseError);
-      ElMessage.error(`处理ZIP文件失败: ${parseError.message || "未知错误"}`);
+    const triggerZipDownload = () => {
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = downloadUrl;
@@ -1048,8 +880,35 @@ const submitRevocationXml = async () => {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(downloadUrl);
+    };
 
-      ElMessage.success("撤回声明生成成功，已开始下载");
+    try {
+      const buffer = await blob.arrayBuffer();
+      zipData.value = buffer;
+
+      const uploadResult = await useUploadZipBytes({
+        arrayBuffer: buffer,
+        caseProcessesId: currentCaseProcessesId.value,
+        caseId: currentCaseId.value,
+        submissionPage: "撤回专利",
+        uploadUrl: `${import.meta.env.VITE_API_BASE_URL}/files/upload-by-bytes`,
+        timeout: 120000,
+      });
+
+      if (uploadResult.success) {
+        triggerZipDownload();
+        ElMessage.success(
+          `撤回专利XML生成成功，已上传${uploadResult.uploaded_count || 0}个文件到后端并自动下载`,
+        );
+      } else {
+        ElMessage.error(`上传失败: ${uploadResult.message || "未知错误"}`);
+      }
+    } catch (parseError) {
+      console.error("处理ZIP文件失败:", parseError);
+      ElMessage.error(`处理ZIP文件失败: ${parseError.message || "未知错误"}`);
+      triggerZipDownload();
+
+      ElMessage.success("撤回专利XML生成成功，已开始下载");
     }
   } catch (error) {
     console.error("提交失败:", error);
@@ -1514,6 +1373,7 @@ const mapDataToForm = (data: any) => {
           uploader: file.uploader || "",
           upload_time: file.upload_time || "",
           operation: file.operation || "删除",
+          url: file.url || "",
         }));
 
         console.log("映射后的fileList:", fileList.value);
@@ -1528,6 +1388,7 @@ const mapDataToForm = (data: any) => {
           uploader: file.uploader,
           upload_time: file.upload_time,
           operation: file.operation,
+          url: file.url,
         }));
 
         // 数据映射完成后查询文件列表
@@ -1786,7 +1647,7 @@ const downloadFile = async (file) => {
     const fileId = file?.id || file?.rawFile?.id;
     if (!fileId) throw new Error("文件ID不可用");
 
-    const downloadUrl = `http://v9665bb7.natappfree.cc/api/files/download?id=${fileId}`;
+    const downloadUrl = `http://t6ce5869.natappfree.cc/api/files/download?id=${fileId}`;
     const response = await fetch(downloadUrl);
     if (!response.ok) throw new Error(`下载失败: ${response.status}`);
 

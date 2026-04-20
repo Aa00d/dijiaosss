@@ -144,6 +144,9 @@ const onSave = async () => {
 };
 
 const submitCostRelief = async () => {
+  // 保存 blob 引用，用于上传成功后下载
+  let responseBlob = null;
+
   try {
     console.log("🚀 开始提交费用减缴请求...");
 
@@ -242,12 +245,12 @@ const submitCostRelief = async () => {
       // 接口报200，立即处理二进制流
       console.log("✅ 接口返回200，开始处理二进制流...");
 
-      // 先读取blob数据，因为Response流只能读取一次
-      const blob = await fetchRes.blob();
-      console.log("📁 读取到的blob大小:", blob.size, "bytes");
+      // 保存 blob 引用（用于后续下载）
+      responseBlob = await fetchRes.blob();
+      console.log("📁 读取到的blob大小:", responseBlob.size, "bytes, 类型:", responseBlob.type);
 
       // 从blob创建ArrayBuffer
-      const buffer = await blob.arrayBuffer();
+      const buffer = await responseBlob.arrayBuffer();
       console.log("🔄 转换为ArrayBuffer完成，大小:", buffer.byteLength, "bytes");
 
       // 从URL获取case_processes_id和case_id参数
@@ -268,6 +271,19 @@ const submitCostRelief = async () => {
         });
 
         console.log("✅ 二进制流上传完成，结果:", uploadResult);
+
+        // 上传成功后，下载ZIP文件
+        console.log("📥 开始下载ZIP文件...");
+        const downloadFileName = `fee-reduction-${Date.now()}.zip`;
+        const downloadLink = document.createElement("a");
+        downloadLink.href = URL.createObjectURL(responseBlob);
+        downloadLink.download = downloadFileName;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        URL.revokeObjectURL(downloadLink.href);
+        ElMessage.success(`ZIP文件已下载: ${downloadFileName}`);
+        console.log("✅ ZIP文件下载完成");
 
         // 上传成功后获取文件列表
         if (uploadResult.success) {
@@ -342,6 +358,7 @@ const loadProcessedFiles = async (caseProcessesId, caseId) => {
       // 使用splice修改现有数组内容，确保响应式更新正常工作
       const mappedFiles = fileList.map((file, index) => ({
         index: index + 1,
+        id: file?.id || file?.fileId || null, // 保存文件ID用于下载
         fileName: file?.fileName || "未知文件名",
         fileCategory: file?.fileType || "未知",
         fileFullName: file?.fileTitle || file?.fileName || "未知",
@@ -362,12 +379,93 @@ const loadProcessedFiles = async (caseProcessesId, caseId) => {
   }
 };
 
-// 处理文件下载
-const handleDownload = (file) => {
-  if (file.url) {
-    window.open(file.url, "_blank");
-  } else {
-    ElMessage.warning("文件下载地址不可用");
+// 处理文件下载 - 通过后端接口获取文件内容并触发下载
+const handleDownload = async (file) => {
+  try {
+    console.log("📥 开始下载文件:", file);
+
+    // 检查文件是否有必要的标识信息
+    if (!file.id && !file.fileName && !file.url) {
+      ElMessage.warning("文件信息不完整，无法下载");
+      return;
+    }
+
+    // 如果有有效的 URL（OSS完整链接），直接打开下载
+    if (file.url && (file.url.startsWith("http://") || file.url.startsWith("https://"))) {
+      // 排除 cases/ 相对路径的情况
+      if (!file.url.startsWith("cases/")) {
+        window.open(file.url, "_blank");
+        return;
+      }
+    }
+
+    const baseUrl = import.meta.env.VITE_API_BASE_URL;
+    let downloadUrl = "";
+    let downloadFileName = file.fileName || "download.zip";
+
+    // 如果有文件 ID，使用 ID 下载
+    if (file.id) {
+      downloadUrl = `${baseUrl}/files/download?id=${encodeURIComponent(file.id)}`;
+    }
+    // 如果有相对路径 URL（以 cases/ 开头），使用 path 下载
+    else if (file.url && file.url.startsWith("cases/")) {
+      downloadUrl = `${baseUrl}/files/download?path=${encodeURIComponent(file.url)}`;
+    }
+    // 如果有 fileName 但没有 ID 和 URL，尝试使用 fileName 作为 path
+    else if (file.fileName) {
+      const path = `cases/${file.fileName}`;
+      downloadUrl = `${baseUrl}/files/download?path=${encodeURIComponent(path)}`;
+    } else {
+      ElMessage.warning("文件下载地址不可用");
+      return;
+    }
+
+    ElMessage.info("正在获取文件...");
+    console.log("🔗 下载接口URL:", downloadUrl);
+
+    // 调用后端接口获取文件内容
+    const response = await fetch(downloadUrl, {
+      method: "GET",
+      headers: {
+        "Accept": "application/octet-stream, application/zip, */*",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`获取文件失败: ${response.status} ${response.statusText}`);
+    }
+
+    // 获取文件内容
+    const blob = await response.blob();
+    console.log("📁 获取到文件blob, 大小:", blob.size, "bytes, 类型:", blob.type);
+
+    if (blob.size === 0) {
+      throw new Error("文件内容为空");
+    }
+
+    // 从响应头获取文件名（如果有）
+    const contentDisposition = response.headers.get("content-disposition");
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (match && match[1]) {
+        downloadFileName = decodeURIComponent(match[1].replace(/['"]/g, ""));
+      }
+    }
+
+    // 创建下载链接并触发下载
+    const downloadLink = document.createElement("a");
+    downloadLink.href = URL.createObjectURL(blob);
+    downloadLink.download = downloadFileName;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    URL.revokeObjectURL(downloadLink.href);
+
+    ElMessage.success(`文件已下载: ${downloadFileName}`);
+    console.log("✅ 文件下载完成");
+  } catch (error) {
+    console.error("❌ 下载文件失败:", error);
+    ElMessage.error(`下载文件失败: ${error.message || "未知错误"}`);
   }
 };
 
