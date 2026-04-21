@@ -230,18 +230,15 @@
           <!-- 设计人部分 -->
           <div class="section">
             <div class="form-row">
-              <el-upload
-                :disabled="isStatementTextMode"
-                :before-upload="handleComparisonUpload"
+              <input
+                ref="comparisonFileInputRef"
+                type="file"
                 accept=".docx"
-                :auto-upload="false"
-                ref="comparisonUploadRef"
-                :file-list="[]"
-                :on-change="(file) => handleFileChange(file, 'comparison')"
-              >
-                <el-button>添加意见陈述word</el-button>
-              </el-upload>
-              <span v-if="statementFileName" class="file-name">{{ statementFileName }}</span>
+                style="display: none"
+                @change="handleComparisonInputChange"
+              />
+              <el-button @click="comparisonFileInputRef?.click()">添加意见陈述word</el-button>
+              <span v-if="comparisonFileName" class="file-name">{{ comparisonFileName }}</span>
             </div>
             <div class="form-row">
               <el-input
@@ -345,10 +342,9 @@
         </el-tab-pane>
 
         <el-tab-pane label="待转档文件" name="pending-content">
-          <div class="btn-group">
-            <el-button :loading="isXmlTransforming" @click="submitForm">启动转档XML</el-button>
+          <div style="margin-bottom: 20px">
+            <el-button type="primary" @click="submitStatementOpinionXml">启动转档XML</el-button>
           </div>
-
           <el-table :data="pendingFiles" style="width: 100%">
             <el-table-column prop="id" label="序号"></el-table-column>
             <el-table-column prop="fileName" label="上传文件名称"></el-table-column>
@@ -507,8 +503,14 @@ import { usePdfViewer } from "../js/usePdfViewer.js";
 import { uploadFileWithInternalCode, getInternalCodeByFileType } from "../js/InternalCode.js";
 import { getFilesBySubmission } from "../js/useFileList.js";
 import { deleteFileById } from "../js/useFileDelete.js";
-const zipData = ref(null);
-const isXmlTransforming = ref(false);
+import { CONVERT_API_BASE_URL } from "../js/convertApiBase.js";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const UPLOAD_BY_BYTES_API_URL = API_BASE_URL + "/files/upload-by-bytes";
+const STATEMENT_OPINION_XML_ACTION = `${CONVERT_API_BASE_URL}/word/statement-opinion/xml`;
+
+const comparisonFileInputRef = ref(null);
+
 
 // 当前激活的标签页
 const activeTab = ref("request-content");
@@ -552,6 +554,14 @@ const statementFile = ref(null);
 const comparisonFile = ref(null);
 const statementFileName = ref("");
 const comparisonFileName = ref("");
+
+const resetComparisonUploadState = () => {
+  if (comparisonFileInputRef.value) {
+    comparisonFileInputRef.value.value = "";
+  }
+  comparisonFile.value = null;
+  comparisonFileName.value = "";
+};
 const uploadType = ref("后台配置选择1");
 const uploadMode = ref("修订模式");
 const proofDocType = ref("其他证明文件-扫描件（普通）A100108");
@@ -608,202 +618,6 @@ const { processesId, caseId } = getParamsFromUrl();
 // 响应式变量，直接使用从URL获取的参数作为初始值
 const case_processes_id = ref(processesId || ""); // 处理事项ID
 const case_id = ref(caseId || ""); // 案件ID
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-
-// 上传ZIP二进制流到新接口
-const uploadZipBytes = async (arrayBuffer) => {
-  try {
-    // 优先从URL获取ID参数
-    const { processesId, caseId } = getParamsFromUrl();
-
-    // 如果URL中没有参数，直接报错
-    if (!processesId || !caseId) {
-      const errorMessage =
-        "URL中缺少必需的查询参数 case_processes_id 或 case_id，无法上传ZIP二进制流";
-      console.error("❌ URL参数检查失败:", errorMessage);
-      ElMessage.error({
-        message: errorMessage,
-        duration: 0,
-        showClose: true,
-      });
-      throw new Error(errorMessage);
-    }
-
-    console.log("=== 上传ZIP二进制流API调试信息 ===");
-    console.log("📋 接口文档要求:");
-    console.log("  - 路径: POST /api/files/upload-by-bytes");
-    console.log("  - Content-Type: application/octet-stream");
-    console.log("  - Body: 原始 ZIP 二进制流");
-    console.log("  - 必须参数: case_processes_id, case_id, submission_page");
-    console.log("");
-
-    // 上传接口使用与著录变更相同的服务器
-    const uploadApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-    const url = `${uploadApiBaseUrl}/files/upload-by-bytes?case_processes_id=${processesId}&case_id=${caseId}&submission_page=${encodeURIComponent("答复审查意见")}`;
-
-    console.log("🔧 实际请求信息:");
-    console.log("  - URL:", url);
-    console.log("  - Method: POST");
-    console.log("  - Headers:", { "Content-Type": "application/octet-stream" });
-    console.log("  - Query参数:", {
-      case_processes_id: processesId,
-      case_id: caseId,
-      submission_page: "答复审查意见",
-    });
-    console.log("  - Body类型: ArrayBuffer");
-    console.log(
-      "  - Body大小:",
-      `${arrayBuffer.byteLength} bytes (${(arrayBuffer.byteLength / 1024).toFixed(2)} KB)`,
-    );
-    console.log("");
-
-    ElMessage.info("正在上传ZIP二进制流...");
-
-    const startTime = Date.now();
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/octet-stream",
-      },
-      body: arrayBuffer,
-    });
-
-    const endTime = Date.now();
-    const duration = endTime - startTime;
-
-    console.log("📡 上传ZIP二进制流API响应信息:");
-    console.log("  - Status:", response.status);
-    console.log("  - StatusText:", response.statusText);
-    console.log("  - OK:", response.ok);
-    console.log("  - Duration:", `${duration}ms`);
-    console.log("");
-
-    // 记录响应头信息
-    const headersObj = {};
-    response.headers.forEach((value, key) => {
-      headersObj[key] = value;
-    });
-    console.log("  - Headers:", headersObj);
-    console.log("");
-
-    if (!response.ok) {
-      console.error("❌ 上传失败:");
-      console.error("  - Status:", response.status);
-      console.error("  - StatusText:", response.statusText);
-      console.error("  - URL:", response.url);
-
-      // 尝试获取错误响应内容
-      try {
-        const errorText = await response.text();
-        console.error("  - Error Response Body:", errorText);
-
-        // 尝试解析为JSON
-        try {
-          const errorJson = JSON.parse(errorText);
-          console.error("  - Error JSON:", JSON.stringify(errorJson, null, 2));
-        } catch (parseError) {
-          console.error("  - 错误响应不是JSON格式");
-        }
-      } catch (e) {
-        console.error("  - 无法读取错误响应内容:", e);
-      }
-
-      throw new Error(`上传失败: ${response.status} ${response.statusText}`);
-    }
-
-    const resultText = await response.text();
-    let resultJson = null;
-
-    try {
-      resultJson = JSON.parse(resultText);
-    } catch (parseError) {
-      console.error("  - 响应不是JSON格式");
-      console.error("  - 响应文本:", resultText);
-      console.error("  - 解析错误:", parseError);
-      throw new Error(`响应格式错误: ${resultText.substring(0, 200)}`);
-    }
-
-    console.log("✅ 上传ZIP二进制流API响应数据:");
-    console.log("  - Response JSON:", JSON.stringify(resultJson, null, 2));
-    console.log("  - Success:", resultJson.success);
-    console.log("  - Uploaded Count:", resultJson.uploaded_count);
-    console.log("  - Items:", resultJson.items);
-    console.log("  - Skipped:", resultJson.skipped);
-    console.log("");
-
-    // 打印每个上传成功的文件信息
-    if (resultJson.items && Array.isArray(resultJson.items)) {
-      console.log("📁 上传成功的文件列表:");
-      resultJson.items.forEach((item, index) => {
-        console.log(`  - 文件 ${index + 1}:`, {
-          id: item.id,
-          file_name: item.file_name,
-          internal_code: item.internal_code,
-          file_category_minor: item.file_category_minor,
-          url: item.url,
-          base_url: item.base_url,
-          key: item.key,
-        });
-      });
-    }
-
-    // 打印跳过的文件信息
-    if (resultJson.skipped && Array.isArray(resultJson.skipped) && resultJson.skipped.length > 0) {
-      console.log("⚠️ 跳过的文件列表:");
-      resultJson.skipped.forEach((item, index) => {
-        const fileName = item.file_name || "";
-        const baseName = fileName.replace(/\.[^/.]+$/, ""); // 去除扩展名
-        const cleanedName = baseName.replace(/[（(].*?[）)]$/, "").trim(); // 清理尾部括号等噪音
-
-        console.log(`  - 跳过 ${index + 1}:`, {
-          file_name: item.file_name,
-          reason: item.reason,
-          base_name: baseName,
-          cleaned_name: cleanedName,
-        });
-      });
-
-      // 显示文件名格式建议
-      console.log("");
-      console.log("📝 关于文件名限制的说明:");
-      console.log("  ⚠️ 注意：这是后端接口的限制，不是前端限制");
-      console.log("  - 后端接口 `/api/files/upload-by-bytes` 会根据文件名解析内部代码");
-      console.log("  - 如果文件名无法解析内部代码，文件会被跳过");
-      console.log("  - 这是后端的设计限制，即使使用二进制流传输，也需要文件名符合格式要求");
-      console.log("");
-      console.log("💡 解决方案建议:");
-      console.log(
-        "  1. 后端改进：建议后端添加参数支持指定默认内部代码（如 `default_internal_code`）",
-      );
-      console.log("  2. 后端改进：建议后端对无法解析的文件使用默认内部代码，而不是跳过");
-      console.log("  3. 前端方案：在上传前重命名ZIP内的文件（需要解压和重新打包，较复杂）");
-      console.log("  4. 临时方案：修改ZIP文件内的文件名，使其包含可识别的文件类型标识");
-      console.log("");
-      console.log("📋 当前后端要求的文件名格式:");
-      console.log("  - 文件名需要包含可识别的内部代码标识");
-      console.log("  - 文件名格式示例:");
-      console.log('    * "200105专利回执说明.pdf" - 包含日期和描述');
-      console.log('    * "权利要求书.pdf" - 直接使用文件类型名称');
-      console.log('    * "说明书附图.pdf" - 使用标准文件类型名称');
-      console.log('  - 避免使用纯数字文件名（如 "100104.pdf"）');
-      console.log('  - 避免使用通用名称（如 "resources.zip"）');
-      console.log("");
-    }
-
-    console.log("=== 上传ZIP二进制流API调试信息结束 ===");
-    console.log("");
-
-    return resultJson;
-  } catch (error) {
-    console.error("❌ 上传ZIP二进制流失败:");
-    console.error("  - Error:", error);
-    console.error("  - Error Message:", error.message || "未知错误");
-    console.error("  - Error Stack:", error.stack);
-    console.log("");
-    ElMessage.error(`上传ZIP二进制流失败: ${error.message || "未知错误"}`);
-    throw error;
-  }
-};
 
 // 查询文件的处理函数
 const handleQueryFiles = async () => {
@@ -840,64 +654,8 @@ const handleQueryFiles = async () => {
     // 检查files是否存在且为数组（根据后端实际返回的数据结构）
     if (result.files && Array.isArray(result.files)) {
       if (result.files.length > 0) {
-        // 筛选 special 为 666 的文件，添加到已转档文件列表
-        const special666Files = result.files.filter((file) => {
-          const specialStr = String(file.special || "").trim();
-          return specialStr === "666";
-        });
-
-        // 排除 special 为 666 的文件，只将其他文件映射到 statementFiles 和 additionalFiles
-        const otherFiles = result.files.filter((file) => {
-          const specialStr = String(file.special || "").trim();
-          return specialStr !== "666";
-        });
-
-        // 根据internalCode的值分类文件：
-        // 1. internalCode为"B100012"的文件放入additionalFiles
-        // 2. 其他文件放入statementFiles，使用之前的过滤条件
-        additionalFiles.value = otherFiles
-          .filter((file) => file.internalCode === "B100012")
-          .map((file, index) => ({
-            id: file.id || index + 1,
-            backendId: file.id || index + 1,
-            fileName: file.fileName || "",
-            fileCategory: file.fileCategoryMinor || "",
-            fileTitle: file.fileTitle || file.fileName || "",
-            fileShortName: file.fileShortName || "",
-            uploader: file.uploader || "",
-            uploadTime: file.uploadTime || "",
-            url: file.url || file.base_url || "",
-            // 添加删除功能所需的id
-            file_id: file.id, // 保留原始文件ID用于删除操作
-          }));
-
-        // 过滤并填充statementFiles，排除internalCode为"B100012"的文件，同时保持原有过滤条件
-        statementFiles.value = otherFiles
-          .filter((file) => file.internalCode !== "B100012")
-          .filter((file) => {
-            const minorCategory = file.fileCategoryMinor || file.file_category || "";
-            return [
-              "权利要求书",
-              "说明书",
-              "说明书附图",
-              "修改对照页",
-              "修改对照",
-              "其他证明文件-扫描件（普通）",
-            ].includes(minorCategory);
-          })
-          .map((file, index) => ({
-            id: file.id || index + 1,
-            fileName: file.fileName || "",
-            fileCategory: file.fileCategoryMinor || file.file_category || "", // 使用fileCategoryMinor或file.file_category作为文件小类
-            fileTitle: file.fileTitle || file.fileName || "",
-            fileShortName: file.fileShortName || "",
-            uploader: file.uploader || "",
-            uploadTime: file.uploadTime || "",
-            url: file.url || file.base_url || "",
-          }));
-
-        // 将 special 为 666 的文件映射到 processedFiles
-        processedFiles.value = special666Files.map((file, index) => {
+        // 直接将全部文件映射到已转档文件列表
+        processedFiles.value = result.files.map((file, index) => {
           // 解析日期，格式化为 YYYY-MM-DD
           let formattedDate = "";
           try {
@@ -926,7 +684,7 @@ const handleQueryFiles = async () => {
           };
         });
 
-        console.log("  - 文件列表数量（排除 special 666）:", otherFiles.length);
+        console.log("  - 文件列表数量:", result.files.length);
         console.log("  - 已转档文件列表数量:", processedFiles.value.length);
 
         ElMessage.success(`成功查询到 ${result.files.length} 个文件`);
@@ -1884,33 +1642,6 @@ async function onSave() {
   }
 }
 
-function getFileNameFromDisposition(disposition) {
-  if (!disposition) return "essence-xml.zip";
-
-  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match?.[1]) {
-    return decodeURIComponent(utf8Match[1]);
-  }
-
-  const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
-  if (plainMatch?.[1]) {
-    return plainMatch[1];
-  }
-
-  return "essence-xml.zip";
-}
-
-function downloadBlobFile(blob, fileName) {
-  const blobUrl = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = blobUrl;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(blobUrl);
-}
-
 function normalizeRemoteUrl(url) {
   const rawUrl = String(url || "").trim();
   if (!rawUrl) return "";
@@ -1920,193 +1651,16 @@ function normalizeRemoteUrl(url) {
   return `https://${rawUrl.replace(/^\/+/, "")}`.split("?")[0];
 }
 
-function buildStatementXmlPayload() {
-  const notifications = [];
-
-  if (notificationType.value !== "regulation") {
-    const typeMap = {
-      "0": 0,
-      "1": 1,
-      "2": 2,
-    };
-
-    notifications.push({
-      type: typeMap[notificationType.value] ?? 0,
-      date: notificationDate.value || "",
-      name: notificationName.value || "",
-      serialNumber: notificationSerial.value || "",
-    });
-  }
-
-  return {
-    notifications,
-    RegulationAmendment: notificationType.value === "regulation",
-  };
-}
-
-function buildStatementXmlFiles() {
-  // 合并 statementFiles 和 additionalFiles 中的文件
-  const allFiles = [...statementFiles.value, ...additionalFiles.value];
-  
-  return allFiles
-    .map((item, index) => {
-      const fileUrl = normalizeRemoteUrl(item.fileUrl || item.url || "");
-      const baseUrl = item.base_url || "";
-      const signedUrl = item.signed_url || item.url || "";
-      
-      if (!fileUrl && !baseUrl && !signedUrl) return null;
-
-      return {
-        file: fileUrl,
-        name: item.fileTitle || item.fileCategory || item.fileName || `陈述文件${index + 1}`,
-        base_url: baseUrl,
-        url: signedUrl,
-      };
-    })
-    .filter(Boolean);
-}
-
-function getComparisonPageUrl() {
-  const directUrl = normalizeRemoteUrl(comparisonFile.value || "");
-  if (directUrl) return directUrl;
-
-  const firstAdditionalFile = additionalFiles.value.find((item) => item.fileUrl || item.url);
-  return normalizeRemoteUrl(firstAdditionalFile?.fileUrl || firstAdditionalFile?.url || "");
-}
-
-async function uploadXmlAndDownloadZip() {
-  const { caseId } = getParamsFromUrl();
-  if (!caseId) {
-    ElMessage.error("地址栏缺少 case_id，无法启动转档XML");
-    return;
-  }
-
-  isXmlTransforming.value = true;
-
-  try {
-    const payload = {
-      statement: buildStatementXmlFiles(),
-      comparisonPage: getComparisonPageUrl(),
-      docx: "测试",
-      case_id: Number(caseId),
-      statementString: JSON.stringify(buildStatementXmlPayload(), null, 2),
-    };
-
-    const url = "http://47.108.144.113:9111/api/word/statement-opinion/xml";
-    console.log("🚀 答复审查意见 XML 接口地址:", url);
-    console.log("🚀 提交 XML payload:", payload);
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`提交失败: ${res.status} ${txt}`);
-    }
-
-    const contentType = res.headers.get("content-type") || "";
-    const disposition = res.headers.get("content-disposition") || "";
-    console.log("📦 XML接口响应头:", {
-      contentType,
-      disposition,
-      status: res.status,
-    });
-
-    if (contentType.includes("application/json") || contentType.includes("text/plain")) {
-      const text = await res.text();
-      console.error("❌ XML接口返回的不是zip，而是文本/JSON:", text);
-      throw new Error(text || "后端未返回zip文件");
-    }
-
-    const blob = await res.blob();
-
-    if (!blob || blob.size === 0) {
-      throw new Error("后端返回的zip文件为空");
-    }
-
-    if (
-      contentType &&
-      !contentType.includes("zip") &&
-      !contentType.includes("octet-stream")
-    ) {
-      try {
-        const text = await blob.text();
-        if (text && (text.startsWith("{") || text.startsWith("[") || text.includes("message"))) {
-          console.error("❌ blob内容看起来不是zip，而是文本:", text);
-          throw new Error(text);
-        }
-      } catch (blobTextErr) {
-        if (blobTextErr instanceof Error) {
-          throw blobTextErr;
-        }
-      }
-    }
-
-    let downloadFileName = "答复审查意见转档结果.zip";
-    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-    const normalMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
-    if (utf8Match?.[1]) {
-      downloadFileName = decodeURIComponent(utf8Match[1]);
-    } else if (normalMatch?.[1]) {
-      downloadFileName = decodeURIComponent(normalMatch[1].replace(/['"]/g, ""));
-    }
-
-    const downloadBlob = new Blob([blob], { type: contentType || "application/zip" });
-    const downloadUrl = URL.createObjectURL(downloadBlob);
-    const link = document.createElement("a");
-    link.href = downloadUrl;
-    link.download = downloadFileName;
-    link.style.display = "none";
-    document.body.appendChild(link);
-
-    const clickEvent = new MouseEvent("click", {
-      view: window,
-      bubbles: true,
-      cancelable: true,
-    });
-    link.dispatchEvent(clickEvent);
-
-    setTimeout(() => {
-      try {
-        window.open(downloadUrl, "_blank", "noopener,noreferrer");
-      } catch (openErr) {
-        console.warn("window.open 下载兜底失败:", openErr);
-      }
-    }, 300);
-
-    setTimeout(() => {
-      try {
-        document.body.removeChild(link);
-      } catch {
-        // ignore
-      }
-      URL.revokeObjectURL(downloadUrl);
-    }, 5000);
-
-    zipData.value = await downloadBlob.arrayBuffer();
-    ElMessage.success(`ZIP 已开始下载：${downloadFileName}`);
-  } catch (error) {
-    console.error("XML 转档失败:", error);
-    ElMessage.error(error.message || "XML 转档失败");
-  } finally {
-    isXmlTransforming.value = false;
-  }
-}
-
-// 提交表单
-async function submitForm() {
-  await uploadXmlAndDownloadZip();
-}
-
 // 处理表单提交
 // 添加统一的文件处理函数 - 使用InternalCode.js接口上传文件
 async function handleFileChange(file, type) {
   try {
+    // 验证 file.raw 是否存在
+    if (!file || !file.raw) {
+      ElMessage.error("文件选择失败，请重试");
+      return;
+    }
+
     // 验证文件是否为DOCX格式
     const isDocx = /\.docx$/i.test(file.name);
     if (!isDocx) {
@@ -2313,635 +1867,32 @@ async function handleFileChange(file, type) {
     }
 
     ElMessage.success("文件上传成功！");
+
+    // 关键：上传完成后强制重建上传组件，避免再次选择同名文件不触发
+    resetComparisonUploadState();
+    statementUploadRef.value?.clearFiles?.();
   } catch (error) {
     console.error("文件上传失败:", error);
     ElMessage.error("文件上传失败: " + error.message);
   }
 }
 
-// 修改submitReviewResponse函数中的验证逻辑
-async function submitReviewResponse(actionType = "save") {
-  // 从URL获取参数
-  const { processesId, caseId } = getParamsFromUrl();
+async function handleComparisonInputChange(event) {
+  const input = event?.target;
+  const rawFile = input?.files?.[0];
+  if (!rawFile) return;
 
-  // 验证comparisonPage字段格式（如果有上传）
-  if (comparisonFile.value) {
-    // 现在comparisonFile.value是URL字符串，不再需要验证文件格式
-    console.log("comparisonPage URL:", comparisonFile.value);
-  }
-
-  // comparisonPage和docx二选一，如果都没有提供，提示用户
-
-  if (!requestForm.docType) {
-    ElMessage.error("请选择类型");
-    return;
-  }
-
-  // 构建表单数据
-  const formData = new FormData();
-
-  // 先从接口获取所有文件URL，用于comparisonPage和Statement字段
-  let allFiles = [];
-  try {
-    const { processesId, caseId } = getParamsFromUrl();
-    const filesResult = await getFilesBySubmission({
-      case_processes_id: processesId || "2001",
-      case_id: caseId || "1001",
-      submission_page: "答复审查意见",
-    });
-
-    console.log("获取文件列表结果:", JSON.stringify(filesResult));
-
-    if (filesResult.success && filesResult.files && Array.isArray(filesResult.files)) {
-      allFiles = filesResult.files;
-    } else if (
-      filesResult.success &&
-      filesResult.data &&
-      filesResult.data.files &&
-      Array.isArray(filesResult.data.files)
-    ) {
-      allFiles = filesResult.data.files;
-    }
-  } catch (error) {
-    console.error("获取文件列表失败:", error);
-  }
-
-  // comparisonPage：传递文件小类为"意见陈述书正文"的文件URL (数组形式)
-  const comparisonPageFiles = allFiles.filter((f) => {
-    const minorCategory = f.fileCategoryMinor || f.file_category || "";
-    const fileName = f.fileName || "";
-    // 查找文件小类为"意见陈述书正文"的文件
-    return (
-      minorCategory === "意见陈述书正文" ||
-      (fileName.toLowerCase().match(/\.(docx|doc|pdf)$/) &&
-        (fileName.includes("意见陈述") ||
-          fileName.includes("comparison") ||
-          fileName.includes("对比")))
-    );
-  });
-
-  // 收集所有comparisonPage URL到数组中
-  const comparisonPageUrls = [];
-
-  // 首先添加从接口获取的文件URL
-  comparisonPageFiles.forEach((file) => {
-    if (file && file.url) {
-      comparisonPageUrls.push(file.url);
-      console.log(`🔍 收集comparisonPage文件URL(文件小类:意见陈述书正文): ${file.url}`);
-      console.log(
-        `🔍 comparisonPage文件信息: fileName=${file.fileName}, fileCategoryMinor=${file.fileCategoryMinor || file.file_category}`,
-      );
-    }
-  });
-
-  // 如果没有从接口获取到URL，但有comparisonFile，则添加备选URL
-  if (comparisonPageUrls.length === 0 && comparisonFile.value) {
-    comparisonPageUrls.push(comparisonFile.value);
-    console.log(`🔍 收集comparisonPage备选URL: ${comparisonFile.value}`);
-  }
-
-  // 以JSON数组字符串形式添加comparisonPage
-  if (comparisonPageUrls.length > 0) {
-    const comparisonPageJsonArray = JSON.stringify(comparisonPageUrls);
-    formData.append("comparisonPage", comparisonPageJsonArray);
-    console.log(`🔍 添加comparisonPage参数，格式为JSON数组字符串: ${comparisonPageJsonArray}`);
-    console.log(`🔍 共添加${comparisonPageUrls.length}个文件URL到comparisonPage数组中`);
-  }
-
-  // 构建StatementSqlString数据 - 严格按照API要求格式 {"data": "日期"}
-  const statementSqlString = {
-    data: new Date().toISOString().split("T")[0],
-  };
-  formData.append("StatementSqlString", JSON.stringify(statementSqlString));
-  console.log("🔍 StatementSqlString内容:", JSON.stringify(statementSqlString));
-
-  // 构建StatementString数据 - 修复多个通知的处理逻辑
-  const isRegulationAmendment = notificationType.value === "regulation";
-
-  // 处理多个通知 - 严格按照API示例格式
-  const notifications = [];
-  if (!isRegulationAmendment) {
-    // 确保 notificationType.value 是有效的数字，默认为 0
-    const typeRaw = notificationType.value || "0";
-    const type = parseInt(typeRaw);
-
-    // 如果解析失败，使用默认值 0
-    const validType = isNaN(type) ? 0 : type;
-
-    const notification = {
-      type: validType,
-      date: notificationDate.value || new Date().toISOString().split("T")[0],
-      serialNumber: notificationSerial.value || "CN2025-001",
-    };
-
-    // 根据API示例，type为0和1时需要name字段
-    if (validType === 0 || validType === 1) {
-      notification.name =
-        notificationName.value || (validType === 0 ? "第一次审查意见通知书" : "补充审查意见通知书");
-    } else if (validType === 2) {
-      // type为2时，根据API示例格式，不包含name字段
-      console.log("🔍 类型为2的通知，按照API要求不包含name字段");
-    }
-
-    notifications.push(notification);
-    console.log("🔍 构建的通知对象:", JSON.stringify(notification));
-  } else {
-    console.log("🔍 法规修改类型，不包含通知信息");
-  }
-
-  // 构建StatementString数据 - 严格按照API要求格式，不包含textContent字段
-  const statementString = {
-    notifications: notifications,
-    RegulationAmendment: isRegulationAmendment,
-  };
-  formData.append("StatementString", JSON.stringify(statementString));
-  console.log("🔍 StatementString内容:", JSON.stringify(statementString));
-
-  // 构建Statement：List<FileNameDto> - 除了文件小类为"意见陈述书正文"的其他文件
-  // 从接口获取的文件列表中筛选出符合要求的文件
-  const statementFilesList = allFiles.filter((f) => {
-    const minorCategory = f.fileCategoryMinor || f.file_category || "";
-    const fileName = f.fileName || "";
-    // 排除文件小类为"意见陈述书正文"的文件，保留其他文件
-    if (minorCategory === "意见陈述书正文") return false;
-
-    // 包含所有其他文件小类的文件，特别是Word或PDF格式
-    return (
-      fileName.toLowerCase().match(/\.(doc|docx|pdf)$/) ||
-      [
-        "权利要求书",
-        "说明书",
-        "说明书附图",
-        "修改对照页",
-        "修改对照",
-        "其他证明文件-扫描件（普通）",
-      ].includes(minorCategory)
-    );
-  });
-
-  console.log(
-    `🔍 找到${statementFilesList.length}个符合Statement要求的文件（排除"意见陈述书正文"）`,
+  await handleFileChange(
+    {
+      name: rawFile.name,
+      raw: rawFile,
+    },
+    "comparison",
   );
 
-  // 将所有文件URL合并到一个Statement[0].fileUrl中，使用JSON数组字符串形式
-  const fileUrls = statementFilesList
-    .filter((fileInfo) => fileInfo && fileInfo.url)
-    .map((fileInfo) => fileInfo.url);
-
-  // 只添加一个Statement[0]项，包含所有文件URL
-  if (fileUrls.length > 0) {
-    const urlsJsonArray = JSON.stringify(fileUrls);
-    formData.append("Statement[0].fileUrl", urlsJsonArray);
-    formData.append("Statement[0].name", "修改对照");
-
-    console.log(`🔍 添加Statement参数: fileUrl=${urlsJsonArray}，name="修改对照"`);
-    console.log(
-      `🔍 所有文件URL已合并到Statement[0].fileUrl中，共${fileUrls.length}个文件，格式为JSON数组字符串`,
-    );
-  } else {
-    // 如果接口获取的文件列表为空，使用本地文件列表作为备选
-    let statementIndex = 0;
-    let hasStatement = false;
-
-    // 首先添加意见陈述书
-    if (statementFile.value) {
-      const statementName = "意见陈述书";
-      formData.append(`Statement[${statementIndex}].file`, statementFile.value);
-      formData.append(`Statement[${statementIndex}].name`, statementName);
-      console.log(
-        `🔍 添加备选Statement参数: name=${statementName}, file=${statementFile.value.name}`,
-      );
-      statementIndex++;
-      hasStatement = true;
-    }
-
-    // 根据上传模式添加其他文件（排除文件小类为"意见陈述书正文"的文件）
-    const validFiles = additionalFiles.value.filter(
-      (f) => f.rawFile && f.fileCategory !== "意见陈述书正文",
-    );
-
-    validFiles.forEach((fileItem) => {
-      const statementName = fileItem.fileCategory || uploadType.value || "附加文件";
-      formData.append(`Statement[${statementIndex}].file`, fileItem.rawFile);
-      formData.append(`Statement[${statementIndex}].name`, statementName);
-      console.log(`🔍 添加备选Statement参数: name=${statementName}, file=${fileItem.fileName}`);
-      statementIndex++;
-      hasStatement = true;
-    });
-
-    // 如果仍然没有Statement项，添加一个空的Statement项以避免后端空指针异常
-    if (!hasStatement) {
-      const emptyFileUrls = JSON.stringify([]);
-      formData.append("Statement[0].fileUrl", emptyFileUrls);
-      formData.append("Statement[0].name", "修改对照");
-      console.log(
-        `🔍 添加空的Statement参数以避免后端空指针异常: fileUrl=${emptyFileUrls}，name="修改对照"`,
-      );
-    }
-  }
-
-  // 实现comparisonPage和docx二选一逻辑（都为非必选）
-  if (comparisonFile.value) {
-    // 如果有comparisonPage文件，则只添加comparisonPage（数组形式）
-    console.log("🔍 comparisonPage已提供，添加comparisonPage[]数组字段");
-  } else if (statementContent.value.trim()) {
-    // 如果没有comparisonPage文件但有statementContent内容，则添加docx字段
-    const docxText = statementContent.value.trim();
-    formData.append("docx", docxText);
-    console.log("🔍 添加docx字段（comparisonPage未提供）");
-    console.log("🔍 docx字段内容:", docxText);
-  } else {
-    console.log("🔍 comparisonPage和docx都未提供");
-  }
-
-  // 添加images字段：从接口获取文件URL，并以JSON数组字符串形式上传
-  try {
-    const { processesId, caseId } = getParamsFromUrl();
-    const filesResult = await getFilesBySubmission({
-      case_processes_id: processesId || "2001",
-      case_id: caseId || "1001",
-      submission_page: "答复审查意见",
-    });
-
-    console.log("获取文件列表结果:", JSON.stringify(filesResult));
-
-    // OSS域名前缀，用于移除
-    const ossDomain = "https://ruidao123.oss-cn-beijing.aliyuncs.com/";
-    const imageUrls = [];
-
-    // 获取文件列表（兼容两种格式）
-    let allFiles = [];
-    if (filesResult.success && filesResult.files && Array.isArray(filesResult.files)) {
-      allFiles = filesResult.files;
-    } else if (
-      filesResult.success &&
-      filesResult.data &&
-      filesResult.data.files &&
-      Array.isArray(filesResult.data.files)
-    ) {
-      allFiles = filesResult.data.files;
-    }
-
-    // 查找所有匹配的图片文件
-    const imageFiles = allFiles.filter((f) => {
-      const minorCategory = f.fileCategoryMinor || f.file_category || "";
-      const fileName = f.fileName || "";
-      const hasUrl = f.url && typeof f.url === "string" && f.url.trim() !== "";
-      console.log(
-        `🔍 检查文件: fileName=${fileName}, minorCategory=${minorCategory}, hasUrl=${hasUrl}`,
-      );
-
-      // 简化并放宽筛选条件，确保所有图片文件都能被匹配
-      // 只要有有效的URL且是图片文件，就添加到列表中
-      const isImageFile = fileName.toLowerCase().match(/\.(jpg|jpeg|png|gif|bmp|tiff)$/) !== null;
-      const isMatch =
-        hasUrl &&
-        (isImageFile ||
-          fileName.includes("委托书") ||
-          minorCategory.includes("扫描件") ||
-          minorCategory.includes("修改对照") ||
-          minorCategory === "其他证明文件-扫描件（普通）");
-      console.log(`🔍 文件匹配结果: ${isMatch}, 是否图片文件: ${isImageFile}`);
-      return isMatch;
-    });
-
-    console.log(`🔍 筛选后的图片文件数量: ${imageFiles.length}`);
-
-    // 收集所有图片URL，处理可能包含的反引号字符
-    imageFiles.forEach((file, index) => {
-      if (file.url && typeof file.url === "string") {
-        // 移除可能包含的反引号字符
-        let url = file.url.trim().replace(/[`]/g, "");
-        // 确保URL有效
-        if (url && url.length > 0) {
-          imageUrls.push(url);
-          console.log(
-            `✅ reply.vue成功添加匹配文件${index + 1}: fileName=${file.fileName || "未知"}, URL=${url}`,
-          );
-        } else {
-          console.warn(
-            `⚠️ URL处理后为空: fileName=${file.fileName || "未知"}, 原始URL=${file.url}`,
-          );
-        }
-      } else {
-        console.warn(`⚠️ 无效的URL: fileName=${file.fileName || "未知"}, url=${file.url}`);
-      }
-    });
-
-    console.log(`🔍 收集到的图片URL数量: ${imageUrls.length}`);
-    console.log(`🔍 图片URL列表: ${JSON.stringify(imageUrls)}`);
-
-    // 如果找到图片URL，以多个同名参数形式添加到FormData，每个URL作为一个单独的images参数
-    if (imageUrls.length > 0) {
-      // 先删除可能存在的images字段
-      formData.delete("images");
-      // 逐个添加图片URL，每个URL作为一个单独的images参数
-      imageUrls.forEach((url, index) => {
-        formData.append("images", url);
-        console.log(`✅ reply.vue成功添加images参数${index + 1}: ${url}`);
-      });
-      console.log(`✅ reply.vue已添加${imageUrls.length}个images参数，每个URL单独提交`);
-    } else {
-      console.log("⚠️ reply.vue未找到匹配的图片文件");
-    }
-  } catch (imageError) {
-    console.error("获取images文件URL失败:", imageError);
-  }
-
-  // 添加mysqlString参数
-  const mysqlString = {
-    applicationNumber: "2024112345678",
-    nameInvention: "智能图像识别系统发明专利",
-    CustomerName: "北京智能科技股份有限公司",
-    signature: "北京智权知识产权代理有限公司",
-    institutionCode: "51217",
-    internalNumber: "PRJ-2024-INV-001",
-    businessType: 2,
-    fileType: 1,
-  };
-  formData.append("mysqlString", JSON.stringify(mysqlString));
-  console.log("🔍 添加mysqlString参数");
-
-  // 添加recordFilingNumber参数
-  formData.append("recordFilingNumber", "888");
-  console.log("🔍 添加recordFilingNumber参数: 888");
-
-  // 移除不需要的额外字段，严格遵循接口参数
-
-  try {
-    // 打印要提交的请求参数（FormData摘要），对大文件只打印文件名以免占用太多控制台空间
-    try {
-      const formDataSummary = {};
-      for (const [key, value] of formData.entries()) {
-        if (value instanceof File) {
-          formDataSummary[key] = value.name || "<<File>>";
-        } else {
-          formDataSummary[key] = value;
-        }
-      }
-      console.log(
-        "准备发送请求 -> actionType:",
-        actionType,
-        "url:",
-        "http://47.108.144.113:9111/api/word/statement-opinion/xml",
-      );
-      console.log("FormData参数摘要:");
-      console.log(
-        "- comparisonPage:",
-        comparisonFile.value ? comparisonFile.value.name : "未提供（JSON数组字符串形式）",
-      );
-      console.log(
-        "- Statement[].fileUrl[]:",
-        statementFile.value ? `${statementFile.value.name} (数组形式)` : "未提供",
-      );
-      console.log("- Statement列表长度:", Math.max(1, additionalFiles.value.length));
-      console.log(
-        "- docx:",
-        comparisonFile.value
-          ? "未提供（comparisonPage已存在）"
-          : statementContent.value.trim()
-            ? `已提供 - 内容: ${statementContent.value.trim()}`
-            : "未提供",
-      );
-      console.log("- StatementSqlString:", "已提供");
-      console.log("- StatementString:", "已提供");
-      // 使用getAll获取所有images参数，而不是只获取第一个
-      const imagesParams = formData.getAll("images");
-      console.log(`- images参数数量: ${imagesParams.length}`);
-      imagesParams.forEach((imageUrl, index) => {
-        console.log(`  images[${index + 1}]: ${imageUrl}`);
-      });
-      console.log("- mysqlString:", "已提供");
-      console.log("- recordFilingNumber:", "888");
-    } catch (e) {
-      console.warn("打印 formData 时出错:", e);
-    }
-
-    // 发送请求到API接口
-    const response = await fetch("http://47.108.144.113:9111/api/word/statement-opinion/xml", {
-      method: "POST",
-      body: formData,
-      // 添加适当的Content-Type和请求头
-      headers: {
-        // 注意：不要手动设置Content-Type，让浏览器自动设置multipart/form-data边界
-        // 'Content-Type': 'multipart/form-data',
-      },
-    });
-
-    // 在读取二进制 blob 之前，尝试解析响应中的 JSON（如果有），并打印 response2 字段
-    try {
-      const contentType = response.headers.get("content-type") || "";
-      if (
-        contentType.includes("application/json") ||
-        contentType.includes("text/json") ||
-        contentType.includes("application/problem+json")
-      ) {
-        const json = await response.clone().json();
-        console.log("收到 JSON 响应:", json);
-        if (json && json.response2 !== undefined) {
-          console.log("response2:", json.response2);
-        } else if (json && json.data && json.data.response2 !== undefined) {
-          console.log("response2 (in data):", json.data.response2);
-        }
-      } else {
-        // 有些接口在非 JSON 返回时仍可能在文本中包含可解析的 JSON 字段，尝试读取文本并解析
-        const text = await response
-          .clone()
-          .text()
-          .catch(() => null);
-        if (text) {
-          try {
-            const parsed = JSON.parse(text);
-            console.log("收到可解析文本响应（已解析为 JSON）:", parsed);
-            if (parsed.response2 !== undefined) console.log("response2:", parsed.response2);
-            else if (parsed.data && parsed.data.response2 !== undefined)
-              console.log("response2 (in data):", parsed.data.response2);
-          } catch {
-            // 非 JSON 文本或二进制内容
-            console.log(
-              "响应为非 JSON 文本/二进制，response 状态码:",
-              response.status,
-              "content-type:",
-              contentType,
-            );
-          }
-        } else {
-          console.log(
-            "响应可能为二进制（blob），status:",
-            response.status,
-            "content-type:",
-            contentType,
-          );
-        }
-      }
-    } catch (e) {
-      console.warn("尝试读取响应中的 response2 时出错:", e);
-    }
-
-    if (response.ok) {
-      // 处理返回的zip文件
-      const blob = await response.blob();
-      try {
-        if (zipData.value && typeof zipData.value === "object" && "value" in zipData.value) {
-          const buffer = await blob.arrayBuffer();
-          zipData.value = buffer;
-          console.log("✅ 已将zip文件数据赋值给zipData用于预览");
-        } else {
-          console.error("❌ zipData不是有效的响应式引用");
-        }
-      } catch (error) {
-        console.error("❌ 转换zip数据时出错:", error);
-      }
-
-      // 尝试上传ZIP二进制流到新接口
-      try {
-        const arrayBuffer = await blob.arrayBuffer();
-        console.log("📦 开始上传ZIP二进制流到新接口...");
-        const uploadResult = await uploadZipBytes(arrayBuffer);
-
-        if (uploadResult.success) {
-          const uploadedCount = uploadResult.uploaded_count || 0;
-          const skippedCount = uploadResult.skipped?.length || 0;
-
-          let message = `提交成功！已上传 ${uploadedCount} 个文件`;
-          if (skippedCount > 0) {
-            message += `，跳过 ${skippedCount} 个文件`;
-
-            // 显示跳过的文件详情
-            const skippedFiles = uploadResult.skipped.map((item) => item.file_name).join("、");
-            console.warn("⚠️ 跳过的文件:", skippedFiles);
-
-            // 检查是否有"未解析到内部代码"的文件
-            const unparsedFiles = uploadResult.skipped.filter(
-              (item) => item.reason === "未解析到内部代码",
-            );
-            if (unparsedFiles.length > 0) {
-              const unparsedFileNames = unparsedFiles.map((item) => item.file_name).join("、");
-              ElMessage.warning({
-                message: `有 ${unparsedFiles.length} 个文件因文件名格式问题被跳过：${unparsedFileNames}`,
-                duration: 8000,
-                showClose: true,
-              });
-              console.warn("📝 关于文件名限制的说明:");
-              console.warn("  ⚠️ 注意：这是后端接口的限制，不是前端限制");
-              console.warn("  - 后端接口会根据文件名解析内部代码，无法解析的文件会被跳过");
-              console.warn(
-                "  - 建议后端改进：添加参数支持指定默认内部代码，或对无法解析的文件使用默认内部代码",
-              );
-              console.warn("  - 临时方案：修改ZIP文件内的文件名，使其包含可识别的文件类型标识");
-              console.warn("  - 请查看控制台获取详细的文件名格式建议和解决方案");
-            } else {
-              ElMessage.warning(`有 ${skippedCount} 个文件被跳过，请查看控制台了解详情`);
-            }
-          } else {
-            ElMessage.success(message);
-          }
-
-          // 上传成功后，刷新文件列表
-          setTimeout(async () => {
-            try {
-              console.log("🔄 上传成功后刷新文件列表...");
-              await handleQueryFiles();
-              console.log("✅ 文件列表已刷新");
-            } catch (error) {
-              console.error("重新获取文件列表失败:", error);
-            }
-          }, 500);
-        } else {
-          // success 为 false 的情况
-          console.error("❌ 上传失败 - 详细错误信息:");
-          console.error("  - Upload Result:", JSON.stringify(uploadResult, null, 2));
-          console.error("  - Success:", uploadResult.success);
-          console.error("  - Message:", uploadResult.message);
-          console.error("  - Uploaded Count:", uploadResult.uploaded_count);
-          console.error("  - Items:", uploadResult.items);
-          console.error("  - Skipped:", uploadResult.skipped);
-
-          // 构建详细的错误消息
-          let errorMessage = uploadResult.message || "上传失败";
-
-          // 如果有跳过的文件，添加到错误消息中
-          if (
-            uploadResult.skipped &&
-            Array.isArray(uploadResult.skipped) &&
-            uploadResult.skipped.length > 0
-          ) {
-            const skippedFiles = uploadResult.skipped.map((item) => item.file_name).join("、");
-            const skippedReasons = uploadResult.skipped
-              .map((item) => `${item.file_name}(${item.reason})`)
-              .join("、");
-            errorMessage += `\n跳过的文件: ${skippedReasons}`;
-            console.error("  - 跳过的文件详情:", uploadResult.skipped);
-          }
-
-          // 如果上传数量为0，说明所有文件都被跳过了
-          if (uploadResult.uploaded_count === 0) {
-            errorMessage += "\n所有文件都未能成功上传，请检查文件名格式是否符合后端要求";
-          }
-
-          console.error("  - 最终错误消息:", errorMessage);
-          ElMessage.error({
-            message: errorMessage,
-            duration: 10000,
-            showClose: true,
-          });
-          throw new Error(errorMessage);
-        }
-      } catch (uploadError) {
-        console.error("❌ ZIP二进制流上传失败:", uploadError);
-        // 如果上传失败，仍然提供下载功能作为后备
-        console.log("⚠️ 上传失败，将提供下载功能作为后备");
-
-        // 创建下载链接
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.style.display = "none";
-        a.href = url;
-        a.download = "review_response_" + new Date().getTime() + ".zip";
-        document.body.appendChild(a);
-        a.click();
-
-        // 清理
-        window.URL.revokeObjectURL(url);
-        if (a && a.parentNode) {
-          document.body.removeChild(a);
-        }
-      }
-
-      console.log(actionType === "save" ? "保存成功" : "提交成功");
-      ElMessage.success(actionType === "save" ? "保存成功！" : "提交成功！");
-    } else {
-      // 尝试获取详细错误信息
-      let errorText = `HTTP错误! 状态码: ${response.status}`;
-      try {
-        // 使用clone()避免响应体流被多次读取
-        const jsonData = await response.clone().json();
-        errorText += `, 错误信息: ${JSON.stringify(jsonData)}`;
-      } catch {
-        try {
-          // 如果无法解析JSON错误信息，尝试获取文本
-          const textData = await response.text();
-          errorText += `, 错误详情: ${textData}`;
-        } catch (textError) {
-          errorText += `, 无法读取响应内容: ${textError.message}`;
-        }
-      }
-      throw new Error(errorText);
-    }
-  } catch (error) {
-    console.error(actionType === "save" ? "保存失败:" : "提交失败:", error);
-
-    // 区分CORS错误和其他错误
-    let errorMsg = (actionType === "save" ? "保存" : "提交") + "失败: " + error.message;
-    if (error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
-      errorMsg += "\n\n可能是跨域(CORS)问题，请联系系统管理员检查API配置";
-    } else if (error.message.includes("500")) {
-      errorMsg += "\n\n服务器内部错误，请稍后重试或联系系统管理员";
-      // 根据用户提示添加具体的500错误可能原因
-      errorMsg += "\n\n注意：文件上传位置不对可能导致此错误，请检查文件是否正确上传";
-    }
-
-    ElMessage.error(errorMsg);
+  // 允许重复选择同一个文件
+  if (input) {
+    input.value = "";
   }
 }
 
@@ -2952,15 +1903,245 @@ function handleProofSelectChange(value) {
   }
 }
 
+async function uploadConvertedZipToBackend(zipBlob) {
+  const { processesId, caseId } = getParamsFromUrl();
+  if (!processesId || !caseId) {
+    ElMessage.warning("缺少 case_id 或 case_processes_id，无法上传转档结果");
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    case_processes_id: processesId,
+    case_id: caseId,
+    submission_page: "答复审查意见",
+  });
+
+  try {
+    const arrayBuffer = await zipBlob.arrayBuffer();
+    console.log("上传转档ZIP到后端：", {
+      url: `${UPLOAD_BY_BYTES_API_URL}?${params.toString()}`,
+      size: zipBlob.size,
+      case_id: caseId,
+      case_processes_id: processesId,
+    });
+    const resp = await fetch(`${UPLOAD_BY_BYTES_API_URL}?${params.toString()}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+      },
+      body: arrayBuffer,
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.success === false) {
+      throw new Error(data.message || data.error || `上传失败（HTTP ${resp.status}）`);
+    }
+    ElMessage.success("转档结果已上传至后台");
+    return data;
+  } catch (err) {
+    console.error("转档结果上传失败：", err);
+    ElMessage.error(err?.message || "转档结果上传失败");
+    return null;
+  }
+}
+
+const submitStatementOpinionXml = async () => {
+  try {
+    const { processesId, caseId } = getParamsFromUrl();
+    if (!processesId || !caseId) {
+      ElMessage.warning("缺少 case_id 或 case_processes_id，无法提交");
+      return;
+    }
+
+    const statementArray = [];
+    if (additionalFiles.value && additionalFiles.value.length > 0) {
+      additionalFiles.value.forEach((file, index) => {
+        const fileUrl = file.fileUrl || file.base_url || file.signed_url || file.url || "";
+        if (fileUrl) {
+          statementArray.push({
+            file: fileUrl,
+            name: file.fileTitle || file.fileCategory || `陈述文件${index + 1}`,
+          });
+        }
+      });
+    }
+
+    if (statementArray.length === 0) {
+      ElMessage.warning("请先上传意见陈述文件后再转档");
+      return;
+    }
+
+    let comparisonPageUrl = "";
+    if (additionalFiles.value && additionalFiles.value.length > 0) {
+      const lastFile = additionalFiles.value[additionalFiles.value.length - 1];
+      comparisonPageUrl = lastFile.fileUrl || lastFile.base_url || lastFile.signed_url || lastFile.url || "";
+    }
+
+    if (!comparisonPageUrl) {
+      ElMessage.warning("请先上传对比文件后再转档");
+      return;
+    }
+
+    const notifications = [];
+    if (notificationType.value === "0") {
+      notifications.push({
+        type: 0,
+        date: notificationDate.value || new Date().toISOString().split("T")[0],
+        name: notificationName.value || "审查意见通知书",
+        serialNumber: notificationSerial.value || "",
+      });
+    } else if (notificationType.value === "1") {
+      notifications.push({
+        type: 1,
+        date: notificationDate.value || new Date().toISOString().split("T")[0],
+        name: notificationName.value || "补充审查意见通知书",
+        serialNumber: notificationSerial.value || "",
+      });
+    } else if (notificationType.value === "2") {
+      notifications.push({
+        type: 2,
+        date: notificationDate.value || new Date().toISOString().split("T")[0],
+        serialNumber: notificationSerial.value || "",
+      });
+    }
+
+    const statementStringJson = {
+      notifications: notifications,
+      RegulationAmendment: notificationType.value === "regulation",
+    };
+
+    const requestData = {
+      statement: statementArray,
+      comparisonPage: comparisonPageUrl,
+      docx: statementContent.value || "意见陈述",
+      case_id: parseInt(caseId, 10) || 0,
+      statementString: JSON.stringify(statementStringJson),
+    };
+
+    console.group("🧾 答复审查意见XML 参数");
+    console.log("请求参数:", requestData);
+    console.groupEnd();
+
+    const apiUrl = STATEMENT_OPINION_XML_ACTION;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", apiUrl, true);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.responseType = "arraybuffer";
+
+    await new Promise((resolve, reject) => {
+      let responseHandled = false;
+
+      xhr.onload = async () => {
+        if (responseHandled) return;
+        responseHandled = true;
+
+        try {
+          if (xhr.status < 200 || xhr.status >= 300) {
+            const text = xhr.response
+              ? new TextDecoder().decode(xhr.response)
+              : `HTTP ${xhr.status}`;
+            ElMessage.error(`HTTP错误 ${xhr.status}：${text}`);
+            reject(new Error(`HTTP ${xhr.status}`));
+            return;
+          }
+
+          const contentType = xhr.getResponseHeader("content-type") || "";
+          const contentDisposition = xhr.getResponseHeader("content-disposition") || "";
+
+          console.log("响应头信息:", {
+            contentType,
+            contentDisposition,
+            status: xhr.status,
+            responseType: xhr.responseType,
+            responseSize: xhr.response ? xhr.response.byteLength : 0,
+          });
+
+          const isZipResponse =
+            contentType.includes("application/zip") ||
+            contentType.includes("application/octet-stream") ||
+            contentType.includes("application/x-zip-compressed") ||
+            (xhr.response instanceof ArrayBuffer && xhr.response.byteLength > 0);
+
+          if (isZipResponse) {
+            const arrayBuffer = xhr.response;
+            if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+              ElMessage.error("服务器返回了空文件");
+              reject(new Error("空文件"));
+              return;
+            }
+
+            console.log("✅ 接收到 ZIP 文件，大小:", arrayBuffer.byteLength, "字节");
+            console.log("✅ 正在上传到服务器，不会触发浏览器下载...");
+
+            const blob = new Blob([arrayBuffer], { type: "application/zip" });
+
+            try {
+              const uploadResult = await uploadConvertedZipToBackend(blob);
+              if (uploadResult) {
+                await handleQueryFiles();
+                console.log("✅ 文件已成功上传并保存到已转档文件列表");
+                ElMessage.success("转档文件已上传并保存到已转档文件列表");
+              } else {
+                console.warn("⚠️ 转档文件上传失败，但文件已生成");
+                ElMessage.warning("转档文件上传失败，但文件已生成");
+              }
+            } catch (uploadErr) {
+              console.error("❌ 上传文件时发生错误:", uploadErr);
+              ElMessage.error(`上传文件失败：${uploadErr?.message || "未知错误"}`);
+            }
+            resolve();
+          } else {
+            const text = xhr.response ? new TextDecoder().decode(xhr.response) : "";
+            console.log("XML接口返回:", text);
+            ElMessage.success("提交成功，服务器已处理请求");
+            resolve();
+          }
+        } catch (err) {
+          console.error("处理响应异常:", err);
+          ElMessage.error(`处理响应异常：${err?.message || "未知错误"}`);
+          reject(err);
+        }
+      };
+
+      xhr.onerror = () => {
+        if (responseHandled) return;
+        responseHandled = true;
+        ElMessage.error("网络请求失败");
+        reject(new Error("网络请求失败"));
+      };
+
+      xhr.ontimeout = () => {
+        if (responseHandled) return;
+        responseHandled = true;
+        ElMessage.error("请求超时");
+        reject(new Error("请求超时"));
+      };
+
+      xhr.onabort = () => {
+        if (responseHandled) return;
+        responseHandled = true;
+        ElMessage.warning("请求已取消");
+        reject(new Error("请求已取消"));
+      };
+
+      xhr.timeout = 60000;
+      xhr.send(JSON.stringify(requestData));
+    });
+  } catch (err) {
+    console.error("提交异常:", err);
+    ElMessage.error(`请求异常：${err?.message || "未知错误"}`);
+  }
+};
+
 // 删除文件函数
 const deleteFile = async (file) => {
   try {
     const backendId = typeof file === "object" ? file.file_id || file.backendId || file.id : file;
+    const targetFileName = typeof file === "object" ? file.fileName || "" : "";
 
     // 调用接口删除文件
     await deleteFileById(backendId);
 
-    // 删除成功后更新本地文件列表
     // 更新additionalFiles列表
     const additionalIndex = additionalFiles.value.findIndex(
       (item) => item.file_id === backendId || item.backendId === backendId || item.id === backendId,
@@ -2984,6 +2165,16 @@ const deleteFile = async (file) => {
     if (pendingIndex > -1) {
       pendingFiles.value.splice(pendingIndex, 1);
     }
+
+    // 关键：删除后强制重建上传组件，允许再次选择同一个文件重新上传
+    resetComparisonUploadState();
+    statementUploadRef.value?.clearFiles?.();
+
+    // 如果删掉的是当前已选文件，也同步清空对应状态
+    if (targetFileName && statementFileName.value === targetFileName) {
+      statementFile.value = null;
+      statementFileName.value = "";
+    }
   } catch (error) {
     console.error("删除文件失败:", error);
     // 错误提示已经在deleteFileById函数中处理
@@ -3002,15 +2193,15 @@ onUnmounted(() => {
     if (statementUploadRef.value) {
       statementUploadRef.value.clearFiles?.();
     }
-    if (comparisonUploadRef.value) {
-      comparisonUploadRef.value.clearFiles?.();
+    if (comparisonFileInputRef.value) {
+      comparisonFileInputRef.value.value = "";
     }
+    comparisonUploadKey.value += 1;
 
     // 清理响应式数据
     statementFile.value = null;
     comparisonFile.value = null;
     selectedFile.value = null;
-    zipData.value = null;
 
     // 关闭PDF查看器
     pdfViewerVisible.value = false;

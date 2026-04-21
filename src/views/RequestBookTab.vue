@@ -5,6 +5,9 @@ import { getCaseInfo } from "../js/useCaseSummary.js";
 import { getFilesBySubmission } from "../js/useFileList.js";
 // API配置
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import { CONVERT_API_BASE_URL } from "../js/convertApiBase.js";
+const UPLOAD_BY_BYTES_API_URL = API_BASE_URL + "/files/upload-by-bytes";
+const REQUEST_BOOK_XML_ACTION = `${CONVERT_API_BASE_URL}/word/xml`;
 import ZipPreview from "../components/ZipPreview.vue";
 import { useFileDelete, deleteFileById } from "../js/useFileDelete.js";
 import { uploadFileWithInternalCode, FILE_TYPE_INTERNAL_CODE_MAP } from "../js/InternalCode.js";
@@ -242,94 +245,69 @@ const attorneyFiles = ref<FileItem[]>([]);
 // 存储special为1的文件列表（上传文件相关）
 const attachmentFiles = ref<FileItem[]>([]);
 
-// 计算属性：合并待转档文件列表（原始pendingFiles + special为1的文件）
+// 计算属性：合并待转档文件列表（只包含special=0,1,2的文件）
 const combinedPendingFiles = computed<FileItem[]>(() => {
-  // 避免不必要的日志输出
   if (import.meta.env.DEV) {
     console.log("计算combinedPendingFiles - pendingFiles数量:", pendingFiles.value.length);
     console.log("计算combinedPendingFiles - attachmentFiles数量:", attachmentFiles.value.length);
+    console.log("计算combinedPendingFiles - attorneyFiles数量:", attorneyFiles.value.length);
   }
 
-  // 将attachmentFiles转换为与pendingFiles相同的格式
-  const formattedAttachmentFiles = attachmentFiles.value.map((file, index) => ({
-    id: file.id || `attach_${index}_${Date.now()}`,
-    fileName: file.fileName || `未命名附件_${index}`,
-    fileType: file.fileType || "未知类型",
-    fileSize: "未知", // attachmentFiles中没有fileSize信息
-    uploadDate: file.uploadDate || "未知日期",
-    status: "待处理",
-    description: "上传附件",
-    url: file.url,
-    special: file.special,
-  }));
+  const result: FileItem[] = [];
 
-  // 优化：简化逻辑，直接合并两个数组，确保API返回的文件能够正确显示
-  // 首先添加原始pendingFiles
-  const result: FileItem[] = [...pendingFiles.value.filter((file) => file)];
+  const addFileIfNotExists = (file: FileItem) => {
+    if (!file) return;
+    const exists = result.some(
+      (existingFile) =>
+        (existingFile.id && file.id && existingFile.id === file.id) ||
+        (!existingFile.id && !file.id && existingFile.fileName === file.fileName),
+    );
+    if (!exists) {
+      result.push(file);
+    }
+  };
 
-  // 然后添加所有attachmentFiles，不进行严格去重以确保显示
-  formattedAttachmentFiles.forEach((file) => {
-    if (file) {
-      // 检查是否真的存在完全相同的文件（id和fileName都相同），如果不存在则添加
-      const exists = result.some(
-        (existingFile) =>
-          (existingFile.id && file.id && existingFile.id === file.id) ||
-          (!existingFile.id && !file.id && existingFile.fileName === file.fileName),
-      );
+  attorneyFiles.value.forEach((file) => {
+    const specialStr = String(file.special).trim();
+    if (specialStr === "0") {
+      addFileIfNotExists({
+        ...file,
+        status: "待处理",
+        description: "委托书图片",
+      });
+    }
+  });
 
-      // 排除special为666的文件，不将其添加到合并列表
-      if (!exists && file.special !== "666") {
-        result.push(file);
-        if (import.meta.env.DEV) {
-          console.log("添加附件到合并列表:", file.fileName);
-        }
-      } else if (import.meta.env.DEV) {
-        console.log("附件已存在，跳过:", file.fileName);
-        // 将跳过的文件添加到已转档文件列表，以便在特殊文件表格中显示
-        if (!processedFiles.value.some((f) => f.id === file.id)) {
-          const skippedFile = {
-            id: file.id,
-            fileName: file.fileName,
-            fileType: file.fileType,
-            fileSize: file.fileSize || "未知",
-            processDate: file.uploadDate || new Date().toISOString(),
-            status: "已跳过",
-            description: "文件已存在，已跳过添加",
-            url: file.url,
-            special: "666", // 设置special属性以便在计算属性中筛选
-          };
-          processedFiles.value.push(skippedFile);
-          console.log("已跳过文件添加到特殊文件列表:", skippedFile.fileName);
-        }
-      }
+  attachmentFiles.value.forEach((file) => {
+    const specialStr = String(file.special).trim();
+    if (specialStr === "1" || specialStr === "2") {
+      addFileIfNotExists({
+        ...file,
+        status: "待处理",
+        description: specialStr === "1" ? "附件文件" : "待转档文件",
+      });
+    }
+  });
+
+  pendingFiles.value.filter((file) => file).forEach((file) => {
+    const specialStr = String(file.special).trim();
+    if (specialStr === "0" || specialStr === "1" || specialStr === "2") {
+      addFileIfNotExists(file);
     }
   });
 
   if (import.meta.env.DEV) {
     console.log("combinedPendingFiles计算完成，总数量:", result.length);
-    console.log("combinedPendingFiles内容:", JSON.stringify(result));
   }
   return result;
 });
 
 // 已转档文件数据
-const processedFiles = ref([
-  {
-    fileName: "",
-    fileType: "",
-    fileSize: "",
-    processDate: "",
-    status: "",
-    description: "",
-  },
-]);
+const processedFiles = ref<any[]>([]);
 
-// 计算属性：专门存储special为666的文件
+// 计算属性：已转档文件列表
 const special666Files = computed(() => {
-  // 筛选出processedFiles中special为666的文件
-  return processedFiles.value.filter(
-    (file) => file.special === "666" || file.description?.includes("特殊文件"),
-  );
+  return processedFiles.value;
 });
 
 // 监听延迟审查复选框变化
@@ -1140,26 +1118,22 @@ const refreshFileList = async () => {
       submission_page: "请求书",
     });
 
-    // 处理获取到的文件列表
     const filesData =
       fileListResult.files || (fileListResult.data && fileListResult.data.files) || [];
     console.log("刷新后获取到的文件数量:", filesData.length);
 
-    // 清空现有列表
     attorneyFiles.value = [];
     attachmentFiles.value = [];
+    processedFiles.value = [];
 
-    // 重置文件计数器
     uploadedFileCount.value = {
       image: 0,
       docx: 0,
       attachment: 0,
     };
 
-    // 重新分类文件
     if (Array.isArray(filesData) && filesData.length > 0) {
       filesData.forEach((file, index) => {
-        // 解析日期，格式化为 YYYY-MM-DD
         let formattedDate = "";
         try {
           formattedDate = file.createTime
@@ -1169,12 +1143,10 @@ const refreshFileList = async () => {
           formattedDate = "未知日期";
         }
 
-        // 提取文件扩展名作为文件类型
         const fileExtension = file.fileName
           ? file.fileName.split(".").pop()?.toUpperCase()
           : "未知类型";
 
-        // 构建统一格式的文件对象
         const fileObj = {
           id: file.id || `file_${index}_${Date.now()}`,
           fileName: file.fileName || `未命名文件_${index}`,
@@ -1185,40 +1157,32 @@ const refreshFileList = async () => {
           special: file.special,
         };
 
-        // 优化special字段判断，处理可能的类型不匹配
         const specialStr = String(file.special).trim();
 
-        // 根据special值分类文件
         if (specialStr === "0") {
-          // special=0 对应图片文件(images)
           attorneyFiles.value.push(fileObj);
           uploadedFileCount.value.image++;
         } else if (specialStr === "1") {
-          // special=1 对应附加文件(fileAttached)
           attachmentFiles.value.push(fileObj);
           uploadedFileCount.value.docx++;
         } else if (specialStr === "2") {
-          // special=2 对应待转档文件(file)
           attachmentFiles.value.push(fileObj);
           uploadedFileCount.value.attachment++;
         } else if (specialStr === "666") {
-          // special为666的文件加入已转档文件列表，确保字段名与表格组件完全匹配
           const specialFile = {
-            id: fileObj.id, // 唯一标识符，用于操作文件
-            fileName: fileObj.fileName, // 对应表格的fileName列 - 文件名
-            fileType: fileObj.fileType, // 对应表格的fileType列 - 文件类型
-            fileSize: "未知", // 对应表格的fileSize列 - 文件大小
-            processDate: fileObj.uploadDate, // 对应表格的processDate列 - 处理日期
-            status: "已完成", // 对应表格的status列 - 固定为'已完成'
-            description: "特殊文件（不参与提交）", // 对应表格的description列 - 文件描述
-            url: fileObj.url, // 用于下载和查看功能的文件URL
-            special: "666", // 用于计算属性special666Files筛选
+            id: fileObj.id,
+            fileName: fileObj.fileName,
+            fileType: fileObj.fileType,
+            fileSize: "未知",
+            processDate: fileObj.uploadDate,
+            status: "已完成",
+            description: "转档文件",
+            url: fileObj.url,
+            special: "666",
           };
           processedFiles.value.push(specialFile);
           console.log(`文件${index + 1}加入已转档文件列表:`, fileObj.fileName);
-          // 不添加到attachmentFiles，避免出现在待转档列表中
         } else {
-          // 默认归类
           attachmentFiles.value.push(fileObj);
           console.log(`文件${index + 1}加入默认列表:`, fileObj.fileName);
         }
@@ -1763,14 +1727,11 @@ const formatFileSize = (bytes: number): string => {
 const onSubmit = async () => {
   try {
     if (isSubmitting.value) return;
-
-    // 执行提交逻辑
     isSubmitting.value = true;
     ElMessage.info("正在提交，请稍候…");
 
     const fd = new FormData();
 
-    // 优先从查询文件接口获取文件数据
     let allFilesData = [];
     if (caseInfo.value?.caseId && caseInfo.value?.processItemId) {
       console.log("从查询文件接口获取文件列表...");
@@ -1780,8 +1741,6 @@ const onSubmit = async () => {
           case_id: caseInfo.value.caseId,
           submission_page: "请求书",
         });
-
-        // 处理获取到的文件列表
         allFilesData =
           fileListResult.files || (fileListResult.data && fileListResult.data.files) || [];
         console.log("从查询接口获取到的文件数量:", allFilesData.length);
@@ -1791,10 +1750,7 @@ const onSubmit = async () => {
       }
     }
 
-    // 处理主文件 - 对应后端参数 file (必填) - 主文件OSS地址 (对应第2343-2344行的上传按钮)
     let mainFileUrl = "";
-
-    // 1. 首先从查询接口获取的文件中查找主文件（docx）
     const docxFilesFromAPI = allFilesData.filter((file: any) => {
       if (
         typeof file !== "object" ||
@@ -1820,7 +1776,6 @@ const onSubmit = async () => {
       }
     }
 
-    // 2. 如果没有找到，使用docxFile.value中的url（如果存在）
     if (
       !mainFileUrl &&
       docxFile.value &&
@@ -1832,7 +1787,6 @@ const onSubmit = async () => {
       console.log("使用本地选择的主文件URL:", mainFileUrl);
     }
 
-    // 3. 确保必填参数始终存在
     if (!mainFileUrl) {
       console.warn("无法获取主文件URL，使用兜底值");
       mainFileUrl =
@@ -1842,8 +1796,6 @@ const onSubmit = async () => {
     fd.append("file", mainFileUrl);
     console.log("已添加主文件参数 file:", mainFileUrl);
 
-    // 处理图片文件 - 对应后端参数 images (可选) - 图片OSS地址列表 (对应第2200-2206行的委托书上传按钮)
-    // 1. 从查询接口获取的文件中筛选图片文件
     const imageFilesFromAPI = allFilesData.filter((file: any) => {
       if (
         typeof file !== "object" ||
@@ -1861,7 +1813,6 @@ const onSubmit = async () => {
     console.log("从查询接口获取到的图片文件数量:", imageFilesFromAPI.length);
     let imagesAdded = false;
 
-    // 将查询接口中的所有图片文件URL添加到FormData
     imageFilesFromAPI.forEach((imageFile: any) => {
       if (
         typeof imageFile === "object" &&
@@ -1875,7 +1826,6 @@ const onSubmit = async () => {
       }
     });
 
-    // 2. 如果查询接口中没有图片，添加本地选择的图片
     if (!imagesAdded && attorneyFiles.value && attorneyFiles.value.length > 0) {
       console.log("使用本地选择的委托书图片文件，共", attorneyFiles.value.length, "个");
       attorneyFiles.value.forEach((img: any) => {
@@ -1892,13 +1842,10 @@ const onSubmit = async () => {
       });
     }
 
-    // 3. 最后，如果仍然没有图片，则不传 images
     if (!imagesAdded) {
       console.log("未找到可用图片文件，本次不传 images");
     }
 
-    // 处理附件文件 - 对应后端参数 fileAttached (可选) - 附加文件OSS地址列表 (对应第2105-2106行的附件上传按钮)
-    // 1. 从查询接口获取的文件中筛选非docx和非图片的文件作为附件
     const attachmentFilesFromAPI = allFilesData.filter((file: any) => {
       if (
         typeof file !== "object" ||
@@ -1912,16 +1859,12 @@ const onSubmit = async () => {
       const isDocx = lowerCaseFileName.endsWith(".docx");
       const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp"];
       const isImage = imageExtensions.some((ext) => lowerCaseFileName.endsWith(ext));
-      // 排除special为666的文件
-      const isSpecial666 = String(file.special).trim() === "666";
-
-      return !isDocx && !isImage && !isSpecial666;
+      return !isDocx && !isImage;
     });
 
     console.log("从查询接口获取到的附件文件数量:", attachmentFilesFromAPI.length);
     let attachmentsAdded = false;
 
-    // 将查询接口中的所有附件文件URL添加到FormData
     attachmentFilesFromAPI.forEach((attachmentFile: any) => {
       if (
         typeof attachmentFile === "object" &&
@@ -1935,7 +1878,6 @@ const onSubmit = async () => {
       }
     });
 
-    // 2. 如果查询接口中没有附件，添加本地选择的附件
     if (!attachmentsAdded && attachmentFiles.value && attachmentFiles.value.length > 0) {
       console.log("使用本地选择的附件文件，共", attachmentFiles.value.length, "个");
       attachmentFiles.value.forEach((file: any) => {
@@ -1945,49 +1887,34 @@ const onSubmit = async () => {
           "url" in file &&
           typeof file.url === "string"
         ) {
-          // 排除special为666的文件
-          const isSpecial666 = String(file.special).trim() === "666";
-          if (!isSpecial666) {
-            fd.append("fileAttached", file.url);
-            console.log("已添加本地附件URL:", file.url);
-            attachmentsAdded = true;
-          } else {
-            console.log("排除special为666的文件:", file.fileName);
-          }
+          fd.append("fileAttached", file.url);
+          console.log("已添加本地附件URL:", file.url);
+          attachmentsAdded = true;
         }
       });
     }
 
-    // 3. 最后，如果仍然没有附件，则不传 fileAttached
     if (!attachmentsAdded) {
       console.log("未找到可用附件文件，本次不传 fileAttached");
     }
 
-    // 记录提交的文件数量统计
     console.log("📋 文件提交统计:");
     console.log("  - 主文件(file): 1个");
     console.log("  - 图片文件(images): 从查询接口获取", imageFilesFromAPI.length, "个");
     console.log("  - 附件文件(fileAttached): 从查询接口获取", attachmentFilesFromAPI.length, "个");
 
-    // 处理业务数据参数 - 所有参数均为String类型
-    // petitionString - 请愿书相关数据字符串
     const petitionStr = JSON.stringify(buildPetitionString() || {});
-    // powerAttorneyString - 授权书相关数据字符串
     const powerAttorneyStr = JSON.stringify(buildPowerAttorneyString() || {});
-    // patentApplicationString - 专利申请相关数据字符串
     const patentApplicationStr = JSON.stringify(buildPatentApplicationString() || {});
-    // petitionSqlString - 请愿书SQL相关字符串
     const petitionSqlStr = JSON.stringify(buildPetitionSqlString() || {});
 
     console.log("提交的JSON字符串参数已准备完毕");
 
-    // 添加所有必需的JSON字符串参数到FormData
     fd.append("petitionString", petitionStr);
     fd.append("powerAttorneyString", powerAttorneyStr);
     fd.append("patentApplicationString", patentApplicationStr);
     fd.append("petitionSqlString", petitionSqlStr);
 
-    // XML生成接口使用不同的服务器
     const currentUrl = new URL(window.location.href);
     const caseIdFromUrl = String(currentUrl.searchParams.get("case_id") || "").trim();
 
@@ -1998,136 +1925,121 @@ const onSubmit = async () => {
     fd.append("case_id", caseIdFromUrl);
     fd.append("caseId", caseIdFromUrl);
 
-    const url = `http://47.108.144.113:9111/api/word/xml?case_id=${encodeURIComponent(caseIdFromUrl)}&caseId=${encodeURIComponent(caseIdFromUrl)}`;
-    console.log("🚀 提交 XML 接口地址:", url);
-    console.log("🚀 提交 XML 的 case_id:", caseIdFromUrl);
-
-    const res = await fetch(url, { method: "POST", body: fd });
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`提交失败: ${res.status} ${txt}`);
-    }
-
-    const contentType = res.headers.get("content-type") || "";
-    const disposition = res.headers.get("content-disposition") || "";
-    console.log("📦 XML接口响应头:", {
-      contentType,
-      disposition,
-      status: res.status,
-    });
-
-    // 如果后端返回的是JSON或文本，优先按错误信息处理
-    if (contentType.includes("application/json") || contentType.includes("text/plain")) {
-      const text = await res.text();
-      console.error("❌ XML接口返回的不是zip，而是文本/JSON:", text);
-      throw new Error(text || "后端未返回zip文件");
-    }
-
-    // 先读取 blob，一份用于直接下载，一份转成二进制继续走现有上传逻辑
-    const blob = await res.blob();
-
-    if (!blob || blob.size === 0) {
-      throw new Error("后端返回的zip文件为空");
-    }
-
-    // 再次兜底校验：有些后端 content-type 不准，但会把错误文本塞进 blob
-    if (
-      contentType &&
-      !contentType.includes("zip") &&
-      !contentType.includes("octet-stream")
-    ) {
-      try {
-        const text = await blob.text();
-        if (text && (text.startsWith("{") || text.startsWith("[") || text.includes("message"))) {
-          console.error("❌ blob内容看起来不是zip，而是文本:", text);
-          throw new Error(text);
-        }
-      } catch (blobTextErr) {
-        if (blobTextErr instanceof Error) {
-          throw blobTextErr;
-        }
-      }
-    }
-
-    let downloadFileName = "请求书转档结果.zip";
-    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-    const normalMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
-    if (utf8Match?.[1]) {
-      downloadFileName = decodeURIComponent(utf8Match[1]);
-    } else if (normalMatch?.[1]) {
-      downloadFileName = decodeURIComponent(normalMatch[1].replace(/['"]/g, ""));
-    }
-
-    console.log("🆕 RequestBookTab 下载逻辑版本: v2-window-open-fallback");
-
-    const downloadBlob = new Blob([blob], { type: contentType || "application/zip" });
-    const downloadUrl = URL.createObjectURL(downloadBlob);
-    const link = document.createElement("a");
-    link.href = downloadUrl;
-    link.download = downloadFileName;
-    link.style.display = "none";
-    document.body.appendChild(link);
-
-    const clickEvent = new MouseEvent("click", {
-      view: window,
-      bubbles: true,
-      cancelable: true,
-    });
-    link.dispatchEvent(clickEvent);
-
-    // 某些浏览器对 blob download 不稳定，再补一次 window.open 兜底
-    setTimeout(() => {
-      try {
-        window.open(downloadUrl, "_blank", "noopener,noreferrer");
-        console.log("🪟 已执行 window.open 下载兜底");
-      } catch (openErr) {
-        console.warn("window.open 下载兜底失败:", openErr);
-      }
-    }, 300);
-
-    setTimeout(() => {
-      try {
-        document.body.removeChild(link);
-      } catch {
-        // ignore
-      }
-      URL.revokeObjectURL(downloadUrl);
-    }, 5000);
-
-    console.log("✅ 已强制触发 ZIP 下载:", {
-      downloadFileName,
-      size: downloadBlob.size,
-      contentType: contentType || "application/zip",
-      downloadUrl,
-    });
-
-    ElMessage.success(`ZIP 已开始下载：${downloadFileName}`);
-
-    // 将二进制数据继续上传，保留现有逻辑
-    const arrayBuffer = await downloadBlob.arrayBuffer();
-    // 获取case_processes_id和case_id，优先使用caseInfo中的数据
     const urlParams = getParamsFromUrl();
     const caseProcessesId = urlParams.caseProcessesId || caseInfo.value?.processItemId || "";
     const caseId = urlParams.caseId || caseInfo.value?.caseId || "";
 
-    const uploadResult = await useUploadZipBytes({
-      arrayBuffer,
-      caseId: caseId,
-      caseProcessesId: caseProcessesId,
-      submissionPage: "请求书",
-      // baseUrl默认为'http://47.108.144.113:9111'
-    });
-
-    if (uploadResult?.success) {
-      ElMessage.success("提交成功，zip 已下载并上传");
-    } else {
-      ElMessage.success("zip 已下载");
+    if (!caseId || !caseProcessesId) {
+      ElMessage.warning("缺少 case_id 或 case_processes_id，无法完成转档");
+      return;
     }
 
-    // 延迟弹出删除弹窗，让用户看到提交成功的消息
-    setTimeout(() => {
-      // openDeleteModal()
-    }, 1500); // 延迟1.5秒后弹出删除弹窗
+    console.log("🚀 提交 XML 接口地址:", REQUEST_BOOK_XML_ACTION);
+    console.log("🚀 提交 XML 的 case_id:", caseIdFromUrl);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", REQUEST_BOOK_XML_ACTION, true);
+    xhr.responseType = "arraybuffer";
+
+    await new Promise<void>((resolve, reject) => {
+      let responseHandled = false;
+
+      xhr.onload = async () => {
+        if (responseHandled) return;
+        responseHandled = true;
+
+        try {
+          if (xhr.status < 200 || xhr.status >= 300) {
+            const text = xhr.response
+              ? new TextDecoder().decode(xhr.response)
+              : `HTTP ${xhr.status}`;
+            ElMessage.error(`HTTP错误 ${xhr.status}：${text}`);
+            reject(new Error(`HTTP ${xhr.status}`));
+            return;
+          }
+
+          const contentType = xhr.getResponseHeader("content-type") || "";
+          const contentDisposition = xhr.getResponseHeader("content-disposition") || "";
+
+          console.log("响应头信息:", {
+            contentType,
+            contentDisposition,
+            status: xhr.status,
+            responseType: xhr.responseType,
+            responseSize: xhr.response ? (xhr.response as ArrayBuffer).byteLength : 0,
+          });
+
+          const isZipResponse =
+            contentType.includes("application/zip") ||
+            contentType.includes("application/octet-stream") ||
+            contentType.includes("application/x-zip-compressed") ||
+            (xhr.response instanceof ArrayBuffer && (xhr.response as ArrayBuffer).byteLength > 0);
+
+          if (isZipResponse) {
+            const arrayBuffer = xhr.response as ArrayBuffer;
+            if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+              ElMessage.error("服务器返回了空文件");
+              reject(new Error("空文件"));
+              return;
+            }
+
+            console.log("✅ 接收到 ZIP 文件，大小:", arrayBuffer.byteLength, "字节");
+            console.log("✅ 正在上传到服务器...");
+
+            const blob = new Blob([arrayBuffer], { type: "application/zip" });
+
+            try {
+              const uploadResult = await uploadConvertedZipToBackend(blob, caseId, caseProcessesId);
+              if (uploadResult) {
+                await refreshFileList();
+                console.log("✅ 文件已成功上传并保存到已转档文件列表");
+                ElMessage.success("转档文件已上传并保存到已转档文件列表");
+              } else {
+                console.warn("⚠️ 转档文件上传失败，但文件已生成");
+                ElMessage.warning("转档文件上传失败，但文件已生成");
+              }
+            } catch (uploadErr: any) {
+              console.error("❌ 上传文件时发生错误:", uploadErr);
+              ElMessage.error(`上传文件失败：${uploadErr?.message || "未知错误"}`);
+            }
+            resolve();
+          } else {
+            const text = xhr.response ? new TextDecoder().decode(xhr.response) : "";
+            console.log("XML接口返回:", text);
+            ElMessage.success("提交成功，服务器已处理请求");
+            resolve();
+          }
+        } catch (err: any) {
+          console.error("处理响应异常:", err);
+          ElMessage.error(`处理响应异常：${err?.message || "未知错误"}`);
+          reject(err);
+        }
+      };
+
+      xhr.onerror = () => {
+        if (responseHandled) return;
+        responseHandled = true;
+        ElMessage.error("网络请求失败");
+        reject(new Error("网络请求失败"));
+      };
+
+      xhr.ontimeout = () => {
+        if (responseHandled) return;
+        responseHandled = true;
+        ElMessage.error("请求超时");
+        reject(new Error("请求超时"));
+      };
+
+      xhr.onabort = () => {
+        if (responseHandled) return;
+        responseHandled = true;
+        ElMessage.warning("请求已取消");
+        reject(new Error("请求已取消"));
+      };
+
+      xhr.timeout = 60000;
+      xhr.send(fd);
+    });
   } catch (err: any) {
     console.error("提交错误:", err);
     ElMessage.error(err?.message || "提交失败");
@@ -2135,6 +2047,46 @@ const onSubmit = async () => {
     isSubmitting.value = false;
   }
 };
+
+async function uploadConvertedZipToBackend(zipBlob: Blob, caseId: string, caseProcessesId: string) {
+  if (!caseId || !caseProcessesId) {
+    ElMessage.warning("缺少 case_id 或 case_processes_id，无法上传转档结果");
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    case_processes_id: caseProcessesId,
+    case_id: caseId,
+    submission_page: "请求书",
+  });
+
+  try {
+    const arrayBuffer = await zipBlob.arrayBuffer();
+    console.log("上传转档ZIP到后端：", {
+      url: `${UPLOAD_BY_BYTES_API_URL}?${params.toString()}`,
+      size: zipBlob.size,
+      caseId,
+      caseProcessesId,
+    });
+    const resp = await fetch(`${UPLOAD_BY_BYTES_API_URL}?${params.toString()}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+      },
+      body: arrayBuffer,
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.success === false) {
+      throw new Error(data.message || data.error || `上传失败（HTTP ${resp.status}）`);
+    }
+    ElMessage.success("转档结果已上传至后台");
+    return data;
+  } catch (err: any) {
+    console.error("转档结果上传失败：", err);
+    ElMessage.error(err?.message || "转档结果上传失败");
+    return null;
+  }
+}
 
 // 直接使用useUploadZipBytes函数，无需解构
 
@@ -2913,7 +2865,7 @@ const executeDelete = async () => {
               <el-button icon="Refresh">刷新</el-button>
             </el-form-item>
           </el-form>
-          special为666的文件展示表格
+          已转档文件列表
           <el-table :data="special666Files" style="width: 100%" border>
             <el-table-column prop="fileName" label="文件名" width="200" />
             <el-table-column prop="fileType" label="文件类型" width="120" />
@@ -2937,7 +2889,7 @@ const executeDelete = async () => {
             v-if="special666Files.length === 0"
             style="text-align: center; padding: 20px; color: #909399"
           >
-            暂无特殊文件（special为666的文件）
+            暂无已转档文件
           </div>
           <zip-preview :zipData="zipData" class="mt-4" />
         </el-tab-pane>

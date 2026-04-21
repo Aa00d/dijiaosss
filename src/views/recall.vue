@@ -864,7 +864,7 @@ const submitRevocationXml = async () => {
       resp.headers?.["content-disposition"] || resp.headers?.["Content-Disposition"] || "";
     let filename = "撤回声明请求.zip";
     const matchRFC = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
-    const matchQuoted = /filename=\"?([^\";]+)\"?/i.exec(disposition);
+    const matchQuoted = /filename="?([^";]+)"?/i.exec(disposition);
     if (matchRFC && matchRFC[1]) {
       filename = decodeURIComponent(matchRFC[1].trim());
     } else if (matchQuoted && matchQuoted[1]) {
@@ -1647,7 +1647,7 @@ const downloadFile = async (file) => {
     const fileId = file?.id || file?.rawFile?.id;
     if (!fileId) throw new Error("文件ID不可用");
 
-    const downloadUrl = `http://t6ce5869.natappfree.cc/api/files/download?id=${fileId}`;
+    const downloadUrl = `http://f589564d.natappfree.cc/api/files/download?id=${fileId}`;
     const response = await fetch(downloadUrl);
     if (!response.ok) throw new Error(`下载失败: ${response.status}`);
 

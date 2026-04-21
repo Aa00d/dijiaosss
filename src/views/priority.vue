@@ -702,7 +702,7 @@ const downloadResponseFile = async (response: Response) => {
   const blob = await response.blob();
 
   let filename = "DAS.xml";
-  const match = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^\"]+)"?/);
+  const match = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/);
   if (match) {
     filename = decodeURIComponent(match[1] || match[2]);
   } else if (contentType.includes("officedocument")) {

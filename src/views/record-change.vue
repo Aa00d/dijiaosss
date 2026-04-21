@@ -3379,7 +3379,7 @@ const handleCorrectionsSelected = async (e: Event) => {
       formdata.append("internal_code", INTERNAL_CODE_POWER_OF_ATTORNEY);
 
       console.log("🔧 实际请求信息:");
-      console.log("  - URL: http://t6ce5869.natappfree.cc/api/files/upload-with-code");
+      console.log("  - URL: http://f589564d.natappfree.cc/api/files/upload-with-code");
       console.log("  - Method: POST");
       console.log("  - Body: FormData");
       console.log("  - FormData内容:");
@@ -3404,7 +3404,7 @@ const handleCorrectionsSelected = async (e: Event) => {
       const startTime = Date.now();
 
       const response = await fetch(
-        "http://t6ce5869.natappfree.cc/api/files/upload-with-code",
+        "http://f589564d.natappfree.cc/api/files/upload-with-code",
         requestOptions,
       );
 
@@ -4020,7 +4020,7 @@ const handlePdfSelected = async (e: Event) => {
     formdata.append("internal_code", INTERNAL_CODE_PDF_ATTACHMENT);
 
     console.log("🔧 实际请求信息:");
-    console.log("  - URL: http://t6ce5869.natappfree.cc/api/files/upload-with-code");
+    console.log("  - URL: http://f589564d.natappfree.cc/api/files/upload-with-code");
     console.log("  - Method: POST");
     console.log("  - Body: FormData");
     console.log("  - FormData内容:");
@@ -4045,7 +4045,7 @@ const handlePdfSelected = async (e: Event) => {
     const startTime = Date.now();
 
     const response = await fetch(
-      "http://t6ce5869.natappfree.cc/api/files/upload-with-code",
+      "http://f589564d.natappfree.cc/api/files/upload-with-code",
       requestOptions,
     );
 
