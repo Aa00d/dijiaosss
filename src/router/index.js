@@ -29,7 +29,7 @@ const router = createRouter({
   routes: [
     //待处理
     { path: '/', redirect: '/pending' },
-    { path: '/pending', name: 'pending', component: PendingView },
+    { path: '/pending', name: 'pending', component: PendingView,  meta: { requiresUserId: true } },
     // 请求书√
     { path: '/request', name: 'request', component: RequestBookTab },
     // 答复审查
@@ -69,16 +69,36 @@ const router = createRouter({
        //外观
          { path: '/appearance', name: 'Appearance', component: Appearance },
          //待提交
-         { path: '/submit', name: 'submit', component: SubmissionView },
+         { path: '/submit', name: 'submit', component: SubmissionView ,  meta: { requiresUserId: true }},
          //专利递交官方
-         { path: '/patent-submission', name: 'patent-submission', component: Submission },
+         { path: '/patent-submission', name: 'patent-submission', component: Submission,  meta: { requiresUserId: true } },
          //专利导入官方
          { path: '/patent-import', name: 'patent-import', component: Submissionimport },
            // 已完成
-    { path: '/completed', name: 'completed', component: CompletedView },
+    { path: '/completed', name: 'completed', component: CompletedView,  meta: { requiresUserId: true } },
                // 审核中
-    { path: '/in-review', name: 'in-review-view', component: InReviewView },
+    { path: '/in-review', name: 'in-review-view', component: InReviewView ,  meta: { requiresUserId: true }},
   ]
 })
 
 export default router
+router.beforeEach((to, from, next) => {
+  const userId = from.query.userid || localStorage.getItem('id')
+
+  // 只处理需要 userid 的页面
+  if (to.meta.requiresUserId) {
+    // 没有 userid 就补上
+    if (!to.query.userid && userId) {
+      next({
+        path: to.path,
+        query: {
+          ...to.query,
+          userid: userId
+        }
+      })
+      return
+    }
+  }
+
+  next()
+})

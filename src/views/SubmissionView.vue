@@ -57,7 +57,7 @@
     <!-- 数据表格 -->
     <div class="table-section">
       <el-table :data="tableData" style="width: 100%" border>
-        <el-table-column  type="selection" width="55"></el-table-column>
+        <el-table-column type="selection" width="55"></el-table-column>
         <el-table-column prop="index" label="序号" width="60" type="index"></el-table-column>
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
@@ -217,14 +217,14 @@ const loadData = async () => {
   try {
     /** 构建请求参数 */
     const params = new URLSearchParams();
-    params.append('page', pagination.currentPage.toString());
-    params.append('pageSize', pagination.pageSize.toString());
-    
-    // 添加userId参数
-    const userId = route.query.userId || "";
+    params.append("page", pagination.currentPage.toString());
+    params.append("pageSize", pagination.pageSize.toString());
+
+    // 添加user_id参数
+    const userId = route.query.user_id || route.query.userid || route.query.userId || "";
     if (userId) {
-      params.append('userId', userId);
-      console.log("传递的userId:", userId);
+      params.append("user_id", userId);
+      console.log("传递的user_id:", userId);
     }
 
     /** 请求接口 */
@@ -264,8 +264,8 @@ const loadData = async () => {
         item.applicationType === "1"
           ? "发明"
           : item.applicationType === "2"
-          ? "实用新型"
-          : "外观设计",
+            ? "实用新型"
+            : "外观设计",
       agency: "", // 响应中没有agency字段
       urgentCase: false, // 响应中没有urgentCase字段
       priorityCase: item.isPriority || false,
