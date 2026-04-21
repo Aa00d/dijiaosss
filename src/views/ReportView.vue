@@ -2151,11 +2151,6 @@ const submitData = async (): Promise<void> => {
         if (result.success) {
           ElMessage.success("提交成功");
 
-          // 提交成功后弹出删除确认框
-          setTimeout(() => {
-            openDeleteConfirmModal();
-          }, 1000);
-
           // 可以添加其他成功处理逻辑，如跳转页面等
         } else {
           ElMessage.error(result.message || "提交失败");

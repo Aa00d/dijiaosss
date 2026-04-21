@@ -121,7 +121,7 @@ onMounted(() => {
 
 <template>
   <main>
-    <h2>待处理</h2>
+    <h2>审核中</h2>
     <!-- URL参数信息展示区域 -->
     <el-card class="mb-4" shadow="hover">
       <template #header>

@@ -41,7 +41,7 @@ const pageMapping = {
 const fetchCaseSummary = async () => {
   loading.value = true;
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/case/temp-pairs/summary`);
+    const response = await fetch(`http://8.140.210.30:6660/api/v1/case-processes/submitted-list`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }

@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch, computed, nextTick } from "vue";
-import type { Ref } from "vue";
+import { ref, reactive, onMounted, watch, computed, nextTick,type } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { getCaseInfo } from "../js/useCaseSummary.js";
 import { useRoute, useRouter } from "vue-router";
@@ -2349,7 +2348,7 @@ async function submitAdditionsCorrections() {
         file: g.url,
         name: g.name || g.fileCategoryMinor || "文件",
       })),
-      cases_id: Number(caseId.value) || 0,
+      case_id: Number(caseId.value) || 0,
       correctionLetterString: correctionLetterString.value,
     };
 
@@ -2428,7 +2427,7 @@ async function submitAdditionsCorrections() {
           if (!caseProcessesId.value || !caseId.value) {
             console.warn("缺少case_processes_id或case_id，跳过ZIP二进制上传");
           } else {
-            const BIN_UPLOAD_BASE = import.meta.env.VITE_API_BASE_URL;
+            const BIN_UPLOAD_BASE = API_BASE_URL;
             // 将 ZIP 以“已转档文件”入库，标记 special=666
             const params = new URLSearchParams({
               case_processes_id: String(caseProcessesId.value),
@@ -2436,7 +2435,7 @@ async function submitAdditionsCorrections() {
               submission_page: "补正",
               special: "666",
             });
-            const binEndpoint = `${BIN_UPLOAD_BASE}/api/files/upload-by-bytes?${params.toString()}`;
+            const binEndpoint = `${BIN_UPLOAD_BASE}/files/upload-by-bytes?${params.toString()}`;
             console.log("开始上传ZIP二进制到:", binEndpoint);
             const binResp = await fetch(binEndpoint, {
               method: "POST",
