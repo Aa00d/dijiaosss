@@ -41,13 +41,45 @@ const pageMapping = {
 const fetchCaseSummary = async () => {
   loading.value = true;
   try {
-    const response = await fetch(`http://8.140.210.30:6660/api/v1/case-processes/submitted-list`);
+    // 获取 URL 中的 userId 参数
+    const userId = route.query.userId || "";
+    console.log("获取到的 userId:", userId);
+
+    const response = await fetch(
+      `http://8.140.210.30:6660/api/v1/case-processes/submitted-list?userId=${userId}`,
+    );
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
-    rows.value = data;
     console.log("案件摘要数据获取成功:", data);
+
+    // 检查数据结构并进行字段映射
+    if (data.data && data.data.data && Array.isArray(data.data.data)) {
+      rows.value = data.data.data.map((item) => ({
+        submission_page: item.submissionPage || item.processItemName || "", // 优先使用submissionPage，否则使用processItemName
+        case_code: item.caseCode || "",
+        case_name: item.caseName || "",
+        application_type:
+          item.applicationType === "1"
+            ? "发明"
+            : item.applicationType === "2"
+              ? "实用新型"
+              : "外观设计",
+        customer_name: item.customerName || "",
+        process_name: item.processItemName || "",
+        internal_deadline: item.internalDeadline || "",
+        customer_deadline: item.customerDeadline || "",
+        official_deadline: item.officialDeadline || "",
+        priority_examination: item.isPriority || false,
+        case_processes_id: item.processId || "",
+        case_id: item.caseId || "",
+      }));
+      console.log("映射后的数据:", rows.value);
+    } else {
+      rows.value = [];
+      console.log("数据格式不正确，设置为空数组");
+    }
   } catch (error) {
     console.error("获取案件摘要失败:", error);
     ElMessage.error("获取案件摘要数据失败，请稍后重试");
@@ -76,13 +108,16 @@ const handleSubmit = (row) => {
       const targetRoute = pageMapping[row.submission_page];
 
       if (targetRoute) {
-        // 跳转到对应的页面，通过state传递参数而不是URL query
-        // 这样参数不会显示在地址栏上
+        // 获取URL中的userId参数
+        const userId = route.query.userId || "";
+
+        // 跳转到对应的页面，通过query传递参数
         router.push({
           path: targetRoute,
-          state: {
+          query: {
             case_processes_id: row.case_processes_id,
             case_id: row.case_id,
+            userId: userId,
           },
         });
         ElMessage.success(`正在跳转到${row.submission_page}页面`);

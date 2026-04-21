@@ -58,6 +58,7 @@
     <!-- 数据表格 -->
     <div class="table-section">
       <el-table :data="tableData" style="width: 100%" border>
+        <el-table-column type="selection" width="55"></el-table-column>
         <el-table-column prop="index" label="序号" width="60" type="index"></el-table-column>
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">

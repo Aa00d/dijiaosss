@@ -46,7 +46,6 @@
 
       <!-- 操作按钮组 -->
       <div class="button-group">
-        <el-button type="primary" @click="importCPC">导入CPC客户</el-button>
         <el-button @click="returnCase">退回</el-button>
         <el-button @click="transferCase">移交</el-button>
         <el-button @click="exportSubmissionPackage">导出递交包</el-button>
@@ -115,6 +114,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
 import { ElMessage } from "element-plus";
+import { useRoute } from "vue-router";
+
+const route = useRoute();
 
 /** ======================
  * 搜索表单
@@ -153,13 +155,6 @@ const getStatusType = (status) => {
     见回执: "info",
   };
   return statusMap[status] || "default";
-};
-
-/** ======================
- * 操作按钮
- * ====================== */
-const importCPC = () => {
-  ElMessage.info("导入CPC客户功能待实现");
 };
 
 const returnCase = () => {
@@ -224,6 +219,13 @@ const loadData = async () => {
     const params = new URLSearchParams();
     params.append('page', pagination.currentPage.toString());
     params.append('pageSize', pagination.pageSize.toString());
+    
+    // 添加userId参数
+    const userId = route.query.userId || "";
+    if (userId) {
+      params.append('userId', userId);
+      console.log("传递的userId:", userId);
+    }
 
     /** 请求接口 */
     const response = await fetch(
@@ -291,6 +293,9 @@ const loadData = async () => {
  * 初始化
  * ====================== */
 onMounted(() => {
+  // 获取并打印userId参数
+  const userId = route.query.userId || "";
+  console.log("SubmissionView 页面获取到的 userId:", userId);
   loadData();
 });
 </script>
