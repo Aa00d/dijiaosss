@@ -709,7 +709,7 @@
         <el-tab-pane label="待转档文件" name="pending-content">
           <div class="tab-content">
             <div class="btn-group">
-              <el-button type="primary" @click="submitNewApplication">启动转档XML</el-button>
+              <el-button type="primary" :loading="isSubmittingXml" @click="submitNewApplication">启动转档XML</el-button>
               <el-button
                 type="primary"
                 :disabled="pendingFiles.length > 0"
@@ -1386,6 +1386,7 @@ const error = ref("");
 
 // 已转档文件确认勾选
 const processedFilesConfirmed = ref(false);
+const isSubmittingXml = ref(false);
 
 // 通用数据加载函数
 const loadData = async (loader: () => Promise<any>, target: any, errorMsg: string) => {
@@ -3483,6 +3484,8 @@ async function submitNewApplication() {
   let functionalPayload: any = null;
   let powerAttorneyPayload: any = null;
 
+  isSubmittingXml.value = true;
+
   try {
     if (!pendingFileUrls.value.length) {
       ElMessage.warning("请先上传待转档文件");
@@ -3709,6 +3712,8 @@ async function submitNewApplication() {
     console.error("错误消息:", err?.message);
     console.error("========== 错误信息结束 ==========");
     ElMessage.error(`提交失败: ${err?.message || "未知错误"}`);
+  } finally {
+    isSubmittingXml.value = false;
   }
 }
 

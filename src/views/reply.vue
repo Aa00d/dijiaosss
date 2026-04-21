@@ -343,7 +343,7 @@
 
         <el-tab-pane label="待转档文件" name="pending-content">
           <div style="margin-bottom: 20px">
-            <el-button type="primary" @click="submitStatementOpinionXml">启动转档XML</el-button>
+            <el-button type="primary" :loading="isSubmittingXml" @click="submitStatementOpinionXml">启动转档XML</el-button>
           </div>
           <el-table :data="pendingFiles" style="width: 100%">
             <el-table-column prop="id" label="序号"></el-table-column>
@@ -1149,6 +1149,7 @@ const processedFiles = ref([]);
 
 // 上传弹窗相关
 const uploadModalVisible = ref(false);
+const isSubmittingXml = ref(false);
 const selectedFile = ref(null);
 const selectedFileName = ref("");
 const fileInputRef = ref(null);
@@ -1945,6 +1946,7 @@ async function uploadConvertedZipToBackend(zipBlob) {
 }
 
 const submitStatementOpinionXml = async () => {
+  isSubmittingXml.value = true;
   try {
     const { processesId, caseId } = getParamsFromUrl();
     if (!processesId || !caseId) {
@@ -2130,6 +2132,8 @@ const submitStatementOpinionXml = async () => {
   } catch (err) {
     console.error("提交异常:", err);
     ElMessage.error(`请求异常：${err?.message || "未知错误"}`);
+  } finally {
+    isSubmittingXml.value = false;
   }
 };
 

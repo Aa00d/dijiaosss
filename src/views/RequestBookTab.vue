@@ -209,24 +209,7 @@ const requestForm = ref({
 });
 
 // 待转档文件数据
-const pendingFiles = ref([
-  {
-    fileName: "申请书.pdf",
-    fileType: "PDF",
-    fileSize: "2.5MB",
-    uploadDate: "2023-05-15",
-    status: "待处理",
-    description: "专利申请书",
-  },
-  {
-    fileName: "说明书.docx",
-    fileType: "DOCX",
-    fileSize: "1.8MB",
-    uploadDate: "2023-05-15",
-    status: "待处理",
-    description: "技术说明书",
-  },
-]);
+const pendingFiles = ref([]);
 
 // 定义文件类型接口
 interface FileItem {
