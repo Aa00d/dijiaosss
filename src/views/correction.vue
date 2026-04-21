@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch, computed, nextTick } from "vue";
-import type { Ref } from "vue";
+import { ref, reactive, onMounted, watch, computed, nextTick,type } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { getCaseInfo } from "../js/useCaseSummary.js";
 import { useRoute, useRouter } from "vue-router";
