@@ -41,12 +41,12 @@ const pageMapping = {
 const fetchCaseSummary = async () => {
   loading.value = true;
   try {
-    // 获取 URL 中的 userId 参数
-    const userId = route.query.userId || "";
-    console.log("获取到的 userId:", userId);
+    // 获取 URL 中的 user_id 参数
+    const userId = route.query.user_id || route.query.userid || route.query.userId || "";
+    console.log("获取到的 user_id:", userId);
 
     const response = await fetch(
-      `http://8.140.210.30:6660/api/v1/case-processes/submitted-list?userId=${userId}`,
+      `http://8.140.210.30:6660/api/v1/case-processes/submitted-list?user_id=${userId}`,
     );
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -108,8 +108,9 @@ const handleSubmit = (row) => {
       const targetRoute = pageMapping[row.submission_page];
 
       if (targetRoute) {
-        // 获取URL中的userId参数
-        const userId = route.query.userId || "";
+        // 获取URL中的userid参数（小写）
+        const userId = route.query.userid || route.query.userId || "";
+        console.log("传递的 userid:", userId);
 
         // 跳转到对应的页面，通过query传递参数
         router.push({

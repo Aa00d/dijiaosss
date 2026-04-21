@@ -318,6 +318,9 @@
 import { reactive, ref, onMounted } from "vue";
 import { ElMessage } from "element-plus";
 import { fetchCompletedList, mapCompletedListData } from "./CompletedView.js";
+import { useRoute } from "vue-router";
+
+const route = useRoute();
 
 const searchForm = reactive({
   ourNumber: "",
@@ -353,7 +356,16 @@ const currentPage = ref(1);
 async function handleSearch() {
   loading.value = true;
   try {
-    const response = await fetchCompletedList(searchForm, currentPage.value, pageSize.value);
+    // 获取 URL 中的 user_id 参数
+    const userId = route.query.user_id || route.query.userid || route.query.userId || "";
+    console.log("获取到的 user_id:", userId);
+
+    const response = await fetchCompletedList(
+      searchForm,
+      currentPage.value,
+      pageSize.value,
+      userId,
+    );
 
     if (response.success) {
       const resultData = Array.isArray(response.data?.data) ? response.data.data : [];
