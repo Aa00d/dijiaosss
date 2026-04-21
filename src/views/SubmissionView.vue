@@ -226,7 +226,7 @@ const loadData = async () => {
 
     /** 请求接口 */
     const response = await fetch(
-      `http://8.140.210.30:6660/api/v1/case-processes/submitted-list?${params.toString()}`,
+      `http://8.140.210.30:6660/api/v1/case-processes/pending-list?${params.toString()}`,
       {
         method: "GET",
         headers: {
