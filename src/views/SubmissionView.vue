@@ -1,6 +1,6 @@
 <template>
   <div class="submission-view">
-    <h1>提交管理</h1>
+    <h1>1提交管理</h1>
 
     <!-- 顶部搜索区域 -->
     <div class="search-section">
