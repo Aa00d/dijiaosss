@@ -5,193 +5,212 @@
       <el-form :model="searchForm" label-width="100px">
         <el-row>
           <el-col :span="6">
-        <el-form-item label="我方文号">
-          <el-input size="small" v-model="searchForm.ourNumber" placeholder="请输入文号"></el-input>
-        </el-form-item>
-        </el-col>
-        <el-col :span="6">
-        <el-form-item label="客户文号">
-          <el-input size="small" v-model="searchForm.customerNumber" placeholder="请输入文号"></el-input>
-        </el-form-item>
-        </el-col>
-        <el-col :span="6">
-        <el-form-item label="申请号">
-          <el-input size="small" v-model="searchForm.applicationNumber" placeholder="请输入申请号"></el-input>
-        </el-form-item>
-        </el-col>
-        <el-col :span="6">
-        <el-form-item label="客户名称">
-          <el-input size="small" v-model="searchForm.customerName" ></el-input>
-        </el-form-item>
-        </el-col>
+            <el-form-item label="我方文号">
+              <el-input
+                size="small"
+                v-model="searchForm.ourNumber"
+                placeholder="请输入文号"
+              ></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="客户文号">
+              <el-input
+                size="small"
+                v-model="searchForm.customerNumber"
+                placeholder="请输入文号"
+              ></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="申请号">
+              <el-input
+                size="small"
+                v-model="searchForm.applicationNumber"
+                placeholder="请输入申请号"
+              ></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="客户名称">
+              <el-input size="small" v-model="searchForm.customerName"></el-input>
+            </el-form-item>
+          </el-col>
         </el-row>
         <el-row>
-        <el-col :span="6">
-        <el-form-item label="提案名称">
-          <el-input size="small" v-model="searchForm.authorizedName" ></el-input>
-        </el-form-item>
-        </el-col>
-        <el-col :span="6">
-        <el-form-item label="项目名称">
-          <el-input size="small" v-model="searchForm.caseName" ></el-input>
-        </el-form-item>
-        </el-col>
-        <el-col :span="6">
-        <el-form-item label="项目类型">
-          <el-select size="small" v-model="searchForm.caseType" placeholder="请选择">
-            <el-option label="名称配置选择" value="option1"></el-option>
-          </el-select>
-        </el-form-item>
-        </el-col>
-        <el-col :span="6">
-        <el-form-item label="申请类型">
-          <el-select size="small" v-model="searchForm.applicationType" placeholder="请选择">
-            <el-option label="名称配置选择" value="option1"></el-option>
-          </el-select>
-        </el-form-item>
-        </el-col>
+          <el-col :span="6">
+            <el-form-item label="提案名称">
+              <el-input size="small" v-model="searchForm.authorizedName"></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="项目名称">
+              <el-input size="small" v-model="searchForm.caseName"></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="项目类型">
+              <el-select size="small" v-model="searchForm.caseType" placeholder="请选择">
+                <el-option label="名称配置选择" value="option1"></el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="申请类型">
+              <el-select size="small" v-model="searchForm.applicationType" placeholder="请选择">
+                <el-option label="名称配置选择" value="option1"></el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
         </el-row>
         <el-row>
-        <el-col :span="6">
-        <el-form-item label="处理事项">
-          <el-select size="small" v-model="searchForm.handleItem" placeholder="请选择">
-            <el-option label="名称配置选择" value="option1"></el-option>
-          </el-select>
-        </el-form-item>
-        </el-col>
-                <el-col :span="6">
-        <el-form-item label="技术主导">
-            <el-input size="small" v-model="searchForm.technicalTopic" ></el-input>
-        </el-form-item>
-        </el-col>
-        <el-col :span="3">
-        <el-form-item label="优先审查">
-          <el-checkbox size="small" v-model="searchForm.priority"></el-checkbox>
-        </el-form-item>
-        </el-col>
-        <el-col :span="3">
+          <el-col :span="6">
+            <el-form-item label="处理事项">
+              <el-select size="small" v-model="searchForm.handleItem" placeholder="请选择">
+                <el-option label="名称配置选择" value="option1"></el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="技术主导">
+              <el-input size="small" v-model="searchForm.technicalTopic"></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="3">
+            <el-form-item label="优先审查">
+              <el-checkbox size="small" v-model="searchForm.priority"></el-checkbox>
+            </el-form-item>
+          </el-col>
+          <el-col :span="3">
             <el-form-item label="预审项目">
-          <el-checkbox size="small" v-model="searchForm.preReview"></el-checkbox>
-        </el-form-item>
-        </el-col>
-        <el-col :span="6">
-        <el-form-item label="双报">
-          <el-select size="small" v-model="searchForm.bilingual" placeholder="请选择">
-            <el-option label="固定二选一" value="option1"></el-option>
-          </el-select>
-        </el-form-item>
-        </el-col>
-                        </el-row>
+              <el-checkbox size="small" v-model="searchForm.preReview"></el-checkbox>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="双报">
+              <el-select size="small" v-model="searchForm.bilingual" placeholder="请选择">
+                <el-option label="固定二选一" value="option1"></el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-row>
-        <el-col :span="6">
-        <el-form-item label="事项处理人">
-          <el-select size="small" v-model="searchForm.caseHandler" placeholder="请选择">
-            <el-option label="名称配置选择" value="option1"></el-option>
-          </el-select>
-        </el-form-item>
-        </el-col>
-        <el-col :span="6">
-        <el-form-item label="申请日">
-          <el-date-picker
-            size="small"
-            v-model="searchForm.applicationDate"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期">
-          </el-date-picker>
-        </el-form-item>
-        </el-col>
-        <el-col :span="6">
-        <el-form-item label="完成日">
-          <el-date-picker
-            size="small"
-            v-model="searchForm.completionDate"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期">
-          </el-date-picker>
-        </el-form-item>
-        </el-col>
-                <el-col :span="6">
-        <el-form-item label="官方期限">
-          <el-date-picker
-            size="small"
-            v-model="searchForm.officialDeadline"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期">
-          </el-date-picker>
-        </el-form-item>
-        </el-col>
+          <el-col :span="6">
+            <el-form-item label="事项处理人">
+              <el-select size="small" v-model="searchForm.caseHandler" placeholder="请选择">
+                <el-option label="名称配置选择" value="option1"></el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="申请日">
+              <el-date-picker
+                size="small"
+                v-model="searchForm.applicationDate"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+              >
+              </el-date-picker>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="完成日">
+              <el-date-picker
+                size="small"
+                v-model="searchForm.completionDate"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+              >
+              </el-date-picker>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="官方期限">
+              <el-date-picker
+                size="small"
+                v-model="searchForm.officialDeadline"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+              >
+              </el-date-picker>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row>
+          <el-col :span="6">
+            <el-form-item label="客户期限">
+              <el-date-picker
+                size="small"
+                v-model="searchForm.customerDeadline"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+              >
+              </el-date-picker>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="内部期限">
+              <el-date-picker
+                size="small"
+                v-model="searchForm.internalDeadline"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+              >
+              </el-date-picker>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="一次提交日期">
+              <el-date-picker
+                size="small"
+                v-model="searchForm.firstReviewDate"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+              >
+              </el-date-picker>
+            </el-form-item>
+          </el-col>
 
-                        </el-row>
+          <el-col :span="6">
+            <el-form-item label="二次提交日期">
+              <el-date-picker
+                size="small"
+                v-model="searchForm.secondReviewDate"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+              >
+              </el-date-picker>
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-row>
-                  <el-col :span="6">
-        <el-form-item label="客户期限">
-          <el-date-picker
-            size="small"
-            v-model="searchForm.customerDeadline"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期">
-          </el-date-picker>
-        </el-form-item>
-        </el-col>
-        <el-col :span="6">
-        <el-form-item label="内部期限">
-          <el-date-picker
-            size="small"
-            v-model="searchForm.internalDeadline"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期">
-          </el-date-picker>
-        </el-form-item>
-        </el-col>
-        <el-col :span="6">
-        <el-form-item label="一次提交日期">
-          <el-date-picker
-            size="small"
-            v-model="searchForm.firstReviewDate"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期">
-          </el-date-picker>
-        </el-form-item>
-        </el-col>
-
-        <el-col :span="6">
-        <el-form-item label="二次提交日期">
-          <el-date-picker
-            size="small"
-            v-model="searchForm.secondReviewDate"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期">
-          </el-date-picker>
-        </el-form-item>
-        </el-col>
-                        </el-row>
-        <el-row>
-        <el-col :span="6">
-          <el-form-item label="配案日">
-          <el-date-picker
-            size="small"
-            v-model="searchForm.assignmentDate"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期">
-          </el-date-picker>
-        </el-form-item>
-        </el-col>
+          <el-col :span="6">
+            <el-form-item label="配案日">
+              <el-date-picker
+                size="small"
+                v-model="searchForm.assignmentDate"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+              >
+              </el-date-picker>
+            </el-form-item>
+          </el-col>
         </el-row>
       </el-form>
       <div class="part-search-buttons">
@@ -212,144 +231,64 @@
         :data="tableData"
         style="width: 100%"
         border
-        @selection-change="handleSelectionChange">
-        <el-table-column
-          type="selection"
-          width="55">
-        </el-table-column>
-        <el-table-column
-          type="index"
-          label="序号"
-          width="50">
-        </el-table-column>
-        <el-table-column
-          prop="ourNumber"
-          label="我方文号"
-          show-overflow-tooltip>
-        </el-table-column>
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="55"> </el-table-column>
+        <el-table-column type="index" label="序号" width="50"> </el-table-column>
+        <el-table-column prop="ourNumber" label="我方文号" show-overflow-tooltip> </el-table-column>
         <!-- <el-table-column
           prop="caseName"
           label="项目名称"
           show-overflow-tooltip>
         </el-table-column> -->
-        <el-table-column
-          prop="applicationNumber"
-          label="申请号"
-          show-overflow-tooltip>
+        <el-table-column prop="applicationNumber" label="申请号" show-overflow-tooltip>
         </el-table-column>
-        <el-table-column
-          prop="customerName"
-          label="客户名称"
-          show-overflow-tooltip>
+        <el-table-column prop="customerName" label="客户名称" show-overflow-tooltip>
         </el-table-column>
 
-        <el-table-column
-          prop="applicationType"
-          label="申请类型"
-          show-overflow-tooltip>
+        <el-table-column prop="applicationType" label="申请类型" show-overflow-tooltip>
         </el-table-column>
-        <el-table-column
-          prop="technicalTopic"
-          label="技术主导"
-          show-overflow-tooltip>
+        <el-table-column prop="technicalTopic" label="技术主导" show-overflow-tooltip>
         </el-table-column>
-        <el-table-column
-          prop="handleItem"
-          label="处理事项"
-          show-overflow-tooltip>
+        <el-table-column prop="handleItem" label="处理事项" show-overflow-tooltip>
         </el-table-column>
-        <el-table-column
-          prop="caseHandler"
-          label="事项处理人"
-          show-overflow-tooltip>
+        <el-table-column prop="caseHandler" label="事项处理人" show-overflow-tooltip>
         </el-table-column>
-        <el-table-column
-          prop="completionDate"
-          label="完成日期"
-          show-overflow-tooltip>
+        <el-table-column prop="completionDate" label="完成日期" show-overflow-tooltip>
         </el-table-column>
-        <el-table-column
-          prop="firstReviewDate"
-          label="一次提交时间"
-          show-overflow-tooltip>
+        <el-table-column prop="firstReviewDate" label="一次提交时间" show-overflow-tooltip>
         </el-table-column>
-        <el-table-column
-          prop="secondReviewDate"
-          label="二次提交时间"
-          show-overflow-tooltip>
+        <el-table-column prop="secondReviewDate" label="二次提交时间" show-overflow-tooltip>
         </el-table-column>
-        <el-table-column
-          prop="bilingual"
-          label="双报"
-          show-overflow-tooltip>
-        </el-table-column>
-        <el-table-column
-          prop="createDate"
-          label="创建日期"
-          show-overflow-tooltip>
+        <el-table-column prop="bilingual" label="双报" show-overflow-tooltip> </el-table-column>
+        <el-table-column prop="createDate" label="创建日期" show-overflow-tooltip>
         </el-table-column>
         <!-- 交底完善度 -->
-        <el-table-column
-          prop="completionDate"
-          label="交底完善度"
-          show-overflow-tooltip>
+        <el-table-column prop="completionDate" label="交底完善度" show-overflow-tooltip>
         </el-table-column>
         <!-- 客户文号 -->
-        <el-table-column
-          prop="customerNumber"
-          label="客户文号"
-          show-overflow-tooltip>
+        <el-table-column prop="customerNumber" label="客户文号" show-overflow-tooltip>
         </el-table-column>
         <!-- 提案名称 -->
-        <el-table-column
-          prop="authorizedName"
-          label="提案名称"
-          show-overflow-tooltip>
+        <el-table-column prop="authorizedName" label="提案名称" show-overflow-tooltip>
         </el-table-column>
         <!-- 案件类型 -->
-        <el-table-column
-          prop="caseType"
-          label="案件类型"
-          show-overflow-tooltip>
-        </el-table-column>
+        <el-table-column prop="caseType" label="案件类型" show-overflow-tooltip> </el-table-column>
         <!-- 预审案 -->
-        <el-table-column
-          prop="preReview"
-          label="预审案"
-          show-overflow-tooltip>
-        </el-table-column>
+        <el-table-column prop="preReview" label="预审案" show-overflow-tooltip> </el-table-column>
         <!-- 优审案 -->
-        <el-table-column
-          prop="priority"
-          label="优审案"
-          show-overflow-tooltip>
-        </el-table-column>
+        <el-table-column prop="priority" label="优审案" show-overflow-tooltip> </el-table-column>
         <!-- 内部期限 -->
-        <el-table-column
-          prop="internalDeadline"
-          label="内部期限"
-          show-overflow-tooltip>
+        <el-table-column prop="internalDeadline" label="内部期限" show-overflow-tooltip>
         </el-table-column>
-        <el-table-column
-          prop="officialDeadline"
-          label="官方期限"
-          show-overflow-tooltip>
+        <el-table-column prop="officialDeadline" label="官方期限" show-overflow-tooltip>
         </el-table-column>
-        <el-table-column
-          prop="customerDeadline"
-          label="客户期限"
-          show-overflow-tooltip>
+        <el-table-column prop="customerDeadline" label="客户期限" show-overflow-tooltip>
         </el-table-column>
-        <el-table-column
-          prop="applicationDate"
-          label="申请日"
-          show-overflow-tooltip>
+        <el-table-column prop="applicationDate" label="申请日" show-overflow-tooltip>
         </el-table-column>
         <!-- 配案日 -->
-        <el-table-column
-          prop="assignmentDate"
-          label="配案日"
-          show-overflow-tooltip>
+        <el-table-column prop="assignmentDate" label="配案日" show-overflow-tooltip>
         </el-table-column>
         <!-- <el-table-column
           fixed="right"
@@ -361,39 +300,40 @@
           </template>
         </el-table-column> -->
       </el-table>
-        <el-pagination
-          @size-change="handleSizeChange"
-          @current-change="handleCurrentChange"
-          :current-page="currentPage"
-          :page-sizes="[10, 20, 30, 50]"
-          :page-size="pageSize"
-          layout="total, sizes, prev, pager, next, jumper"
-          :total="total">
-        </el-pagination>
+      <el-pagination
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+        :current-page="currentPage"
+        :page-sizes="[10, 20, 30, 50]"
+        :page-size="pageSize"
+        layout="total, sizes, prev, pager, next, jumper"
+        :total="total"
+      >
+      </el-pagination>
     </div>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { fetchCompletedList, mapCompletedListData } from './CompletedView.js'
+import { reactive, ref, onMounted } from "vue";
+import { ElMessage } from "element-plus";
+import { fetchCompletedList, mapCompletedListData } from "./CompletedView.js";
 
 const searchForm = reactive({
-  ourNumber: '',
-  customerNumber: '',
-  applicationNumber: '',
-  customerName: '',
-  authorizedName: '',
-  caseName: '',
-  caseType: '',
-  applicationType: '',
-  handleItem: '',
-  technicalTopic: '',
+  ourNumber: "",
+  customerNumber: "",
+  applicationNumber: "",
+  customerName: "",
+  authorizedName: "",
+  caseName: "",
+  caseType: "",
+  applicationType: "",
+  handleItem: "",
+  technicalTopic: "",
   priority: false,
   preReview: false,
-  bilingual: '',
-  caseHandler: '',
+  bilingual: "",
+  caseHandler: "",
   applicationDate: null,
   completionDate: null,
   officialDeadline: null,
@@ -401,59 +341,59 @@ const searchForm = reactive({
   internalDeadline: null,
   firstReviewDate: null,
   secondReviewDate: null,
-  assignmentDate: null
-})
+  assignmentDate: null,
+});
 
-const tableData = ref([])
-const loading = ref(false)
-const total = ref(0)
-const pageSize = ref(10)
-const currentPage = ref(1)
+const tableData = ref([]);
+const loading = ref(false);
+const total = ref(0);
+const pageSize = ref(10);
+const currentPage = ref(1);
 
 async function handleSearch() {
-  loading.value = true
+  loading.value = true;
   try {
-    const response = await fetchCompletedList(searchForm, currentPage.value, pageSize.value)
+    const response = await fetchCompletedList(searchForm, currentPage.value, pageSize.value);
 
     if (response.success) {
-      const resultData = Array.isArray(response.data?.data) ? response.data.data : []
-      const totalCount = typeof response.data?.total === 'number' ? response.data.total : 0
+      const resultData = Array.isArray(response.data?.data) ? response.data.data : [];
+      const totalCount = typeof response.data?.total === "number" ? response.data.total : 0;
 
-      tableData.value = mapCompletedListData(resultData)
-      total.value = totalCount
+      tableData.value = mapCompletedListData(resultData);
+      total.value = totalCount;
 
       if (tableData.value.length === 0) {
-        ElMessage.info('没有找到符合条件的数据')
+        ElMessage.info("没有找到符合条件的数据");
       } else {
-        ElMessage.success(`找到 ${tableData.value.length} 条数据`)
+        ElMessage.success(`找到 ${tableData.value.length} 条数据`);
       }
     } else {
-      ElMessage.error(response.msg || '获取数据失败')
+      ElMessage.error(response.msg || "获取数据失败");
     }
   } catch (error) {
-    console.error('查询失败:', error)
-    ElMessage.error('查询失败，请稍后重试')
+    console.error("查询失败:", error);
+    ElMessage.error("查询失败，请稍后重试");
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 function handleReset() {
   Object.assign(searchForm, {
-    ourNumber: '',
-    customerNumber: '',
-    applicationNumber: '',
-    customerName: '',
-    authorizedName: '',
-    caseName: '',
-    caseType: '',
-    applicationType: '',
-    handleItem: '',
-    technicalTopic: '',
+    ourNumber: "",
+    customerNumber: "",
+    applicationNumber: "",
+    customerName: "",
+    authorizedName: "",
+    caseName: "",
+    caseType: "",
+    applicationType: "",
+    handleItem: "",
+    technicalTopic: "",
     priority: false,
     preReview: false,
-    bilingual: '',
-    caseHandler: '',
+    bilingual: "",
+    caseHandler: "",
     applicationDate: null,
     completionDate: null,
     officialDeadline: null,
@@ -461,37 +401,37 @@ function handleReset() {
     internalDeadline: null,
     firstReviewDate: null,
     secondReviewDate: null,
-    assignmentDate: null
-  })
+    assignmentDate: null,
+  });
 }
 
 function handleExport() {
   // 导出逻辑 placeholder
-  console.log('export')
+  console.log("export");
 }
 
 async function handleSizeChange(size) {
-  pageSize.value = size
-  currentPage.value = 1
-  await handleSearch()
-  console.log('page size changed:', size)
+  pageSize.value = size;
+  currentPage.value = 1;
+  await handleSearch();
+  console.log("page size changed:", size);
 }
 
 async function handleCurrentChange(current) {
-  currentPage.value = current
-  await handleSearch()
-  console.log('current page changed:', current)
+  currentPage.value = current;
+  await handleSearch();
+  console.log("current page changed:", current);
 }
 
 function handleSelectionChange(selection) {
   // 选择事件处理函数
-  console.log('selection changed:', selection)
+  console.log("selection changed:", selection);
 }
 
 // 初始加载数据
 onMounted(() => {
-  handleSearch()
-})
+  handleSearch();
+});
 </script>
 
 <style scoped>
@@ -501,16 +441,16 @@ onMounted(() => {
   min-height: 100vh;
   box-sizing: border-box;
 }
-.page-container{
+.page-container {
   width: 100%;
   padding: 18px 24px;
   box-sizing: border-box;
 }
-.filter-form{
-  background:#fff;
-  padding:16px;
-  border-radius:6px;
-  box-shadow: 0 0 0 1px rgba(0,0,0,0.02);
+.filter-form {
+  background: #fff;
+  padding: 16px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.02);
 }
 /* 搜索区域样式 */
 .section {
@@ -549,16 +489,16 @@ onMounted(() => {
   border-bottom: 1px solid #ebeef5;
 }
 /* 表单行布局 */
-.row{
-  display:flex;
-  gap:18px;
-  align-items:flex-start;
-  margin-bottom:12px;
+.row {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 12px;
   flex-wrap: wrap;
 }
-.el-form-item{
-  flex:1;
-  min-width:200px;
+.el-form-item {
+  flex: 1;
+  min-width: 200px;
   max-width: calc(25% - 13.5px); /* 确保一行四个输入 */
   margin-bottom: 16px;
 }
@@ -582,11 +522,11 @@ onMounted(() => {
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
   overflow: hidden;
 }
-.table-wrap{
-  padding:16px;
+.table-wrap {
+  padding: 16px;
 }
 .part-table-title span {
-  font-weight:600;
+  font-weight: 600;
   color: #303133;
   font-size: 16px;
 }
