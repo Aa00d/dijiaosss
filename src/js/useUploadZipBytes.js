@@ -9,6 +9,7 @@ import { ElMessage } from "element-plus";
  * @param {string|number} [options.caseProcessesId] - 案件流程ID，默认'2001'
  * @param {string|number} [options.caseId] - 案件ID，默认'1001'
  * @param {string} [options.submissionPage] - 提交页面类型，默认'请求书'
+ * @param {string} [options.special] - 文件特殊标识，默认'666'（已转档文件）
  * @param {string} [options.baseUrl] - API基础URL，默认'http://47.108.144.113:9111'
  * @returns {Promise<Object>} 返回上传结果Promise
  *
@@ -28,6 +29,7 @@ export const useUploadZipBytes = async (options = {}) => {
     caseProcessesId = 2001,
     caseId = 1001,
     submissionPage = "请求书",
+    special = "666",
     baseUrl = import.meta.env.VITE_API_BASE_URL,
   } = options;
 
@@ -38,7 +40,7 @@ export const useUploadZipBytes = async (options = {}) => {
     }
 
     // 构建URL，使用正确的参数格式和编码
-    const url = `${baseUrl}/files/upload-by-bytes?case_processes_id=${caseProcessesId}&case_id=${caseId}&submission_page=${encodeURIComponent(submissionPage)}`;
+    const url = `${baseUrl}/files/upload-by-bytes?case_processes_id=${caseProcessesId}&case_id=${caseId}&submission_page=${encodeURIComponent(submissionPage)}&special=${encodeURIComponent(special)}`;
 
     console.log("准备上传zip二进制流:", {
       url: url,
@@ -46,6 +48,7 @@ export const useUploadZipBytes = async (options = {}) => {
       case_processes_id: caseProcessesId,
       case_id: caseId,
       submission_page: submissionPage,
+      special: special,
     });
 
     // 使用fetch API上传二进制流

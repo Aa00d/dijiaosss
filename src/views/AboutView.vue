@@ -907,7 +907,6 @@ import {
   getFileTypeOptions,
 } from "../js/InternalCode.js";
 import { deleteFileById } from "../js/useFileDelete.js";
-import { useUploadZipBytes } from "../js/useUploadZipBytes.js";
 import { CONVERT_API_BASE_URL } from "../js/convertApiBase.js";
 import PdfViewer from "../components/PdfViewer.vue";
 import { usePdfViewer } from "../js/usePdfViewer.js";
@@ -1388,23 +1387,6 @@ const error = ref("");
 // 已转档文件确认勾选
 const processedFilesConfirmed = ref(false);
 
-// 上传zip二进制流到数据库的函数（使用封装的通用函数）
-const uploadZipBytes = async (arrayBuffer: ArrayBuffer) => {
-  // 获取case_processes_id和case_id，优先使用caseInfo中的数据
-  const urlParams = getUrlParamsWithDefaults();
-  const caseProcessesId = urlParams.caseProcessesId || caseInfo.case_processes_id || "2001";
-  const caseId = urlParams.caseId || caseInfo.case_id || "1001";
-
-  // 调用封装的通用上传函数
-  return await useUploadZipBytes({
-    arrayBuffer,
-    caseProcessesId,
-    caseId,
-    submissionPage: "实用", // 实用页面的固定值
-    apiBaseUrl: API_BASE_URL,
-  });
-};
-
 // 通用数据加载函数
 const loadData = async (loader: () => Promise<any>, target: any, errorMsg: string) => {
   if (!caseId.value) return;
@@ -1437,7 +1419,7 @@ const loadPendingFiles = () =>
 const loadProcessFlow = () =>
   loadData(() => getProcessFlow(caseId.value), processFlow, "加载流程过程失败");
 
-// 查询已转档文件（special为666的文件）
+// 查询已转档文件（展示当前提交页下的所有文件）
 const refreshProcessedFiles = async () => {
   try {
     const urlParams = getUrlParamsWithDefaults();
@@ -1452,7 +1434,7 @@ const refreshProcessedFiles = async () => {
 
     const submissionPage = "实用";
 
-    console.log("📤 查询已转档文件（special=666）:", {
+    console.log("📤 查询已转档文件（展示全部文件）:", {
       case_processes_id: caseProcessesId,
       case_id: caseId,
       submission_page: submissionPage,
@@ -1497,7 +1479,7 @@ const refreshProcessedFiles = async () => {
       rawList: rawList,
     });
 
-    // 过滤出special为666的文件
+    // 直接展示接口返回的全部文件
     const processedFilesList: ProcessedFileItem[] = [];
     let serialNumber = 1;
 
@@ -1520,13 +1502,6 @@ const refreshProcessedFiles = async () => {
     };
 
     for (const it of rawList) {
-      // 检查special字段是否为666（支持多种可能的字段名）
-      const special = String(it?.special || it?.specialFlag || it?.special_flag || "");
-
-      if (special !== "666") {
-        continue; // 跳过不是666的文件
-      }
-
       // 获取文件名（支持多种可能的字段名）
       const name = String(
         it?.fileName ||
@@ -2075,7 +2050,7 @@ const handleAdditionalFileUpload = async (event: Event) => {
           if (casesMatch && casesMatch[1]) {
             purePathUrl = casesMatch[1];
           } else {
-            const pathMatch = purePathUrl.match(/\/([^\/]+\/.*?)(?:\?|$)/);
+            const pathMatch = purePathUrl.match(/\/([^/]+\/.*?)(?:\?|$)/);
             if (pathMatch && pathMatch[1]) {
               purePathUrl = pathMatch[1];
               if (!purePathUrl.startsWith("cases/")) {
@@ -3505,24 +3480,12 @@ function buildPetitionSqlPayload() {
 
 // 提交 multipart/form-data
 async function submitNewApplication() {
-  // 在函数作用域顶部声明变量，以便在 catch 块中访问
   let functionalPayload: any = null;
   let powerAttorneyPayload: any = null;
-  let petitionSqlPayload: any = null;
 
   try {
-    // 注意：主文件检查已移除，因为file字段现在只用于待转档文件的URL
-    // 如果后端接口需要主文件，请使用其他字段名，并在此处添加相应的检查
-
-    // 检查是否有待转档文件URL
     if (!pendingFileUrls.value.length) {
       ElMessage.warning("请先上传待转档文件");
-      return;
-    }
-
-    // 检查是否有图片URL
-    if (!imageUrls.value.length) {
-      ElMessage.error("请先上传图片");
       return;
     }
 
@@ -3537,50 +3500,15 @@ async function submitNewApplication() {
 
     const fd = new FormData();
     fd.append("case_id", caseId);
-    // 注意：主文件不再使用file字段，file字段只用于待转档文件的URL
-    // 如果需要主文件，可能需要使用其他字段名，请根据后端接口文档调整
-
-    // 新增：图片上传后返回的URL（images字段 - 对应上传委托书按钮）
-    // 注意：images字段只包含委托书上传后返回的URL，多个URL需要一条一条传，不能数组上传
-    // 逻辑：直接使用上传时保存的完整URL，每个URL单独追加到FormData
-    // 提交时再次确保URL包含协议前缀
-    imageUrls.value.forEach((url) => {
-      let processedUrl = url.trim();
-      // 确保URL包含协议前缀
-      if (!processedUrl.startsWith("http://") && !processedUrl.startsWith("https://")) {
-        processedUrl = "https://" + processedUrl;
-      } else if (processedUrl.startsWith("http://")) {
-        processedUrl = processedUrl.replace(/^http:\/\//, "https://");
-      }
-      // 移除查询参数
-      processedUrl = processedUrl.split("?")[0];
-      fd.append("images", processedUrl);
-    });
-    console.log(
-      "✅ images字段已添加到FormData (URL数量:",
-      imageUrls.value.length,
-      "):",
-      imageUrls.value,
-    );
 
     functionalPayload = buildFunctionalPayload();
     powerAttorneyPayload = buildPowerAttorneyPayload();
-    petitionSqlPayload = buildPetitionSqlPayload();
 
-    // 验证和清理 JSON 字段，确保格式正确
     try {
-      // 验证 functionalPayload 是否可以正确序列化
       const functionalJsonStr = JSON.stringify(functionalPayload);
-      JSON.parse(functionalJsonStr); // 验证可以解析
-
-      // 验证 powerAttorneyPayload
+      JSON.parse(functionalJsonStr);
       const powerAttorneyJsonStr = JSON.stringify(powerAttorneyPayload);
       JSON.parse(powerAttorneyJsonStr);
-
-      // 验证 petitionSqlPayload
-      const petitionSqlJsonStr = JSON.stringify(petitionSqlPayload);
-      JSON.parse(petitionSqlJsonStr);
-
       console.log("✅ JSON 字段验证通过");
     } catch (jsonErr) {
       console.error("❌ JSON 字段格式验证失败:", jsonErr);
@@ -3588,25 +3516,16 @@ async function submitNewApplication() {
       return;
     }
 
-    // 按接口文档：发送 functionalString；为兼容旧接口同时发送 patentApplicationString
     fd.append("functionalString", JSON.stringify(functionalPayload));
     fd.append("powerAttorneyString", JSON.stringify(powerAttorneyPayload));
-    fd.append("petitionSqlString", JSON.stringify(petitionSqlPayload));
-    fd.append("patentApplicationString", JSON.stringify(functionalPayload));
 
-    // 新增：附加文件上传后返回的URL（fileAttached字段 - 对应请求书里面的上传文件按钮）
-    // 注意：fileAttached字段只包含请求书中附加文件上传后返回的URL，多个URL需要一条一条传，不能数组上传
-    // 逻辑：直接使用上传时保存的完整URL，每个URL单独追加到FormData
-    // 提交时再次确保URL包含协议前缀
     attachedFileUrls.value.forEach((url) => {
       let processedUrl = url.trim();
-      // 确保URL包含协议前缀
       if (!processedUrl.startsWith("http://") && !processedUrl.startsWith("https://")) {
         processedUrl = "https://" + processedUrl;
       } else if (processedUrl.startsWith("http://")) {
         processedUrl = processedUrl.replace(/^http:\/\//, "https://");
       }
-      // 移除查询参数
       processedUrl = processedUrl.split("?")[0];
       fd.append("fileAttached", processedUrl);
     });
@@ -3617,19 +3536,13 @@ async function submitNewApplication() {
       attachedFileUrls.value,
     );
 
-    // 新增：待转档文件上传后返回的URL（file字段 - 对应待转档文件里面的上传文件按钮）
-    // 注意：file字段只包含待转档文件上传后返回的URL，多个URL需要一条一条传，不能数组上传
-    // 逻辑：直接使用上传时保存的完整URL，每个URL单独追加到FormData
-    // 提交时再次确保URL包含协议前缀
     pendingFileUrls.value.forEach((url) => {
       let processedUrl = url.trim();
-      // 确保URL包含协议前缀
       if (!processedUrl.startsWith("http://") && !processedUrl.startsWith("https://")) {
         processedUrl = "https://" + processedUrl;
       } else if (processedUrl.startsWith("http://")) {
         processedUrl = processedUrl.replace(/^http:\/\//, "https://");
       }
-      // 移除查询参数
       processedUrl = processedUrl.split("?")[0];
       fd.append("file", processedUrl);
     });
@@ -3640,336 +3553,162 @@ async function submitNewApplication() {
       pendingFileUrls.value,
     );
 
-    // 调试日志与 cURL 复现 - 详细输出所有提交的数据
     console.log("========== 启动转档 - 提交数据检查 ==========");
     console.log(" API URL:", apiUrl);
-    console.log("");
-    console.log("文件字段 (file):");
-    console.log("  - URL数量:", pendingFileUrls.value.length);
-    console.log("  - URL列表:", pendingFileUrls.value);
-    console.log("  - JSON字符串:", JSON.stringify(pendingFileUrls.value));
-    console.log("");
-    console.log("图片字段 (images):");
-    console.log("  - URL数量:", imageUrls.value.length);
-    console.log("  - URL列表:", imageUrls.value);
-    console.log("  - JSON字符串:", JSON.stringify(imageUrls.value));
-    console.log("");
-    console.log(" 附加文件字段 (fileAttached):");
-    console.log("  - URL数量:", attachedFileUrls.value.length);
-    console.log("  - URL列表:", attachedFileUrls.value);
-    console.log("  - JSON字符串:", JSON.stringify(attachedFileUrls.value));
-    console.log("");
-    console.log("功能性JSON (functionalString):");
-    console.log("  - 发明人数量:", functionalPayload.inventors?.length || 0);
-    console.log("  - 申请人数量:", functionalPayload.proposers?.length || 0);
-    console.log("  - 代理人数量:", functionalPayload.agentDtos?.length || 0);
-    console.log("  - 完整数据:", JSON.stringify(functionalPayload, null, 2));
-    console.log("");
-    console.log(" 委托书JSON (powerAttorneyString):");
-    console.log("  - 代理人数量:", powerAttorneyPayload.agents?.length || 0);
-    console.log("  - 委托日期:", powerAttorneyPayload.entrustDate);
-    console.log("  - 声明:", powerAttorneyPayload.declaration);
-    console.log("  - 完整数据:", JSON.stringify(powerAttorneyPayload, null, 2));
-    console.log("");
-    console.log(" 请求书JSON (petitionSqlString):");
-    console.log("  - 完整数据:", JSON.stringify(petitionSqlPayload, null, 2));
-    console.log("");
+    console.log("case_id:", caseId);
+    console.log("file字段 URL数量:", pendingFileUrls.value.length);
+    console.log("fileAttached字段 URL数量:", attachedFileUrls.value.length);
+    console.log("functionalString:", JSON.stringify(functionalPayload, null, 2));
+    console.log("powerAttorneyString:", JSON.stringify(powerAttorneyPayload, null, 2));
     console.log(" ========== 所有字段数据检查完成 ==========");
-    const curl = [
-      `curl -X POST "${apiUrl}"`,
-      imageUrls.value.length > 0 ? `-F "images=${JSON.stringify(imageUrls.value)}"` : "",
-      attachedFileUrls.value.length > 0
-        ? `-F "fileAttached=${JSON.stringify(attachedFileUrls.value)}"`
-        : "",
-      pendingFileUrls.value.length > 0 ? `-F "file=${JSON.stringify(pendingFileUrls.value)}"` : "",
-      `-F "functionalString=${JSON.stringify(functionalPayload)}"`,
-      `-F "powerAttorneyString=${JSON.stringify(powerAttorneyPayload)}"`,
-      `-F "petitionSqlString=${JSON.stringify(petitionSqlPayload)}"`,
-      `-F "patentApplicationString=${JSON.stringify(functionalPayload)}"`,
-    ]
-      .filter(Boolean)
-      .join(" ");
-    console.log("cURL:", curl);
 
-    // 使用blob响应类型以处理zip文件
-    const resp = await axios.post(apiUrl, fd, {
-      responseType: "blob", // 设置为blob以处理二进制响应（zip文件）
-    });
+    // 使用 XMLHttpRequest 接收二进制流
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", apiUrl, true);
+    xhr.responseType = "arraybuffer";
 
-    // 检查响应类型
-    const contentType = resp.headers["content-type"] || resp.headers["Content-Type"] || "";
-    console.log("响应Content-Type:", contentType);
+    await new Promise<void>((resolve, reject) => {
+      let responseHandled = false;
 
-    if (contentType.includes("application/json")) {
-      // JSON响应（错误或其他信息）
-      try {
-        const text = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsText(resp.data);
-        });
-        const jsonData = JSON.parse(text);
-        console.log("提交响应:", jsonData);
+      xhr.onload = async () => {
+        if (responseHandled) return;
+        responseHandled = true;
 
-        // 检查是否是错误响应
-        if (jsonData.code && jsonData.code !== 200 && jsonData.code !== 20000) {
-          // 这是错误响应，显示错误信息
-          const errorMsg = jsonData.message || `提交失败 (错误代码: ${jsonData.code})`;
-          console.error("❌ 后端返回错误:", jsonData);
-          ElMessage.error(errorMsg);
-          throw new Error(errorMsg);
-        } else {
-          // 成功响应
-          ElMessage.success("提交成功");
-        }
-      } catch (parseErr: any) {
-        // 如果是因为后端返回错误而抛出的异常，直接抛出，不继续处理
-        if (parseErr?.message && !parseErr.message.includes("JSON")) {
-          throw parseErr;
-        }
-
-        console.error("解析JSON响应失败:", parseErr);
-        ElMessage.success("提交成功");
-      }
-    } else if (
-      contentType.includes("application/zip") ||
-      contentType.includes("application/x-zip-compressed") ||
-      contentType.includes("octet-stream")
-    ) {
-      const blob = resp.data;
-      const disposition = resp.headers["content-disposition"] || resp.headers["Content-Disposition"] || "";
-
-      let downloadFileName = "实用新型转档结果.zip";
-      const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-      const normalMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
-      if (utf8Match?.[1]) {
-        downloadFileName = decodeURIComponent(utf8Match[1]);
-      } else if (normalMatch?.[1]) {
-        downloadFileName = decodeURIComponent(normalMatch[1].replace(/['"]/g, ""));
-      }
-
-      const downloadBlob = new Blob([blob], { type: contentType || "application/zip" });
-      const downloadUrl = URL.createObjectURL(downloadBlob);
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = downloadFileName;
-      link.style.display = "none";
-      document.body.appendChild(link);
-
-      const clickEvent = new MouseEvent("click", {
-        view: window,
-        bubbles: true,
-        cancelable: true,
-      });
-      link.dispatchEvent(clickEvent);
-
-      setTimeout(() => {
         try {
-          window.open(downloadUrl, "_blank", "noopener,noreferrer");
-        } catch (openErr) {
-          console.warn("window.open 下载兜底失败:", openErr);
-        }
-      }, 300);
-
-      setTimeout(() => {
-        try {
-          document.body.removeChild(link);
-        } catch {
-          // ignore
-        }
-        URL.revokeObjectURL(downloadUrl);
-      }, 5000);
-
-      console.log("✅ ZIP文件已开始下载:", downloadFileName, "大小:", blob.size, "字节");
-      ElMessage.success(`ZIP 已开始下载：${downloadFileName}`);
-    } else {
-      try {
-        const blob = resp.data;
-        const buffer = await blob.slice(0, 4).arrayBuffer();
-        const header = new Uint8Array(buffer);
-        if (header[0] === 0x50 && header[1] === 0x4b && header[2] === 0x03 && header[3] === 0x04) {
-          const disposition = resp.headers["content-disposition"] || resp.headers["Content-Disposition"] || "";
-
-          let downloadFileName = "实用新型转档结果.zip";
-          const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-          const normalMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
-          if (utf8Match?.[1]) {
-            downloadFileName = decodeURIComponent(utf8Match[1]);
-          } else if (normalMatch?.[1]) {
-            downloadFileName = decodeURIComponent(normalMatch[1].replace(/['"]/g, ""));
+          if (xhr.status < 200 || xhr.status >= 300) {
+            const text = xhr.response
+              ? new TextDecoder().decode(xhr.response)
+              : `HTTP ${xhr.status}`;
+            ElMessage.error(`HTTP错误 ${xhr.status}：${text}`);
+            reject(new Error(`HTTP ${xhr.status}`));
+            return;
           }
 
-          const downloadBlob = new Blob([blob], { type: "application/zip" });
-          const downloadUrl = URL.createObjectURL(downloadBlob);
-          const link = document.createElement("a");
-          link.href = downloadUrl;
-          link.download = downloadFileName;
-          link.style.display = "none";
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(downloadUrl);
+          const contentType = xhr.getResponseHeader("content-type") || "";
+          const contentDisposition = xhr.getResponseHeader("content-disposition") || "";
 
-          console.log("✅ ZIP文件已开始下载（通过文件头检测）:", downloadFileName);
-          ElMessage.success(`ZIP 已开始下载：${downloadFileName}`);
-        } else {
-          ElMessage.success("提交成功");
-          console.log("提交响应类型:", contentType);
+          console.log("📦 XML接口响应头:", {
+            contentType,
+            contentDisposition,
+            status: xhr.status,
+            responseType: xhr.responseType,
+            responseSize: xhr.response ? (xhr.response as ArrayBuffer).byteLength : 0,
+          });
+
+          const isZipResponse =
+            contentType.includes("application/zip") ||
+            contentType.includes("application/octet-stream") ||
+            contentType.includes("application/x-zip-compressed") ||
+            (xhr.response instanceof ArrayBuffer && (xhr.response as ArrayBuffer).byteLength > 0);
+
+          if (isZipResponse) {
+            const arrayBuffer = xhr.response as ArrayBuffer;
+            if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+              ElMessage.error("服务器返回了空文件");
+              reject(new Error("空文件"));
+              return;
+            }
+
+            console.log("✅ 接收到 ZIP 文件，大小:", arrayBuffer.byteLength, "字节");
+
+            const blob = new Blob([arrayBuffer], { type: "application/zip" });
+
+            try {
+              const params = new URLSearchParams({
+                case_processes_id: urlParams.caseProcessesId,
+                case_id: urlParams.caseId,
+                submission_page: "实用",
+              });
+
+              console.log("上传转档ZIP到后端：", {
+                url: `${API_BASE_URL}/files/upload-by-bytes?${params.toString()}`,
+                size: blob.size,
+                case_id: urlParams.caseId,
+                case_processes_id: urlParams.caseProcessesId,
+              });
+
+              const resp = await fetch(`${API_BASE_URL}/files/upload-by-bytes?${params.toString()}`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/octet-stream",
+                },
+                body: arrayBuffer,
+              });
+
+              const uploadResult = await resp.json().catch(() => ({}));
+              if (!resp.ok || uploadResult.success === false) {
+                throw new Error(uploadResult.message || uploadResult.error || `上传失败（HTTP ${resp.status}）`);
+              }
+
+              if (uploadResult?.success) {
+                await refreshProcessedFiles();
+                console.log("✅ 文件已成功上传并保存到已转档文件列表");
+                ElMessage.success("转档文件已上传并保存到已转档文件列表");
+              } else {
+                console.warn("⚠️ 转档文件上传失败");
+                ElMessage.warning("转档文件上传失败");
+              }
+            } catch (uploadErr: any) {
+              console.error("❌ 上传文件时发生错误:", uploadErr);
+              ElMessage.error(`上传文件失败：${uploadErr?.message || "未知错误"}`);
+            }
+            resolve();
+          } else {
+            const text = xhr.response ? new TextDecoder().decode(xhr.response) : "";
+            console.log("XML接口返回:", text);
+
+            try {
+              const jsonData = JSON.parse(text);
+              if (jsonData.code && jsonData.code !== 200 && jsonData.code !== 20000) {
+                const errorMsg = jsonData.message || `提交失败 (错误代码: ${jsonData.code})`;
+                ElMessage.error(errorMsg);
+                reject(new Error(errorMsg));
+              } else {
+                ElMessage.success("提交成功");
+                resolve();
+              }
+            } catch {
+              ElMessage.success("提交成功");
+              resolve();
+            }
+          }
+        } catch (err: any) {
+          console.error("处理响应异常:", err);
+          ElMessage.error(`处理响应异常：${err?.message || "未知错误"}`);
+          reject(err);
         }
-      } catch {
-        ElMessage.success("提交成功");
-        console.log("提交响应类型:", contentType);
-      }
-    }
+      };
+
+      xhr.onerror = () => {
+        if (responseHandled) return;
+        responseHandled = true;
+        ElMessage.error("网络请求失败");
+        reject(new Error("网络请求失败"));
+      };
+
+      xhr.ontimeout = () => {
+        if (responseHandled) return;
+        responseHandled = true;
+        ElMessage.error("请求超时");
+        reject(new Error("请求超时"));
+      };
+
+      xhr.onabort = () => {
+        if (responseHandled) return;
+        responseHandled = true;
+        ElMessage.warning("请求已取消");
+        reject(new Error("请求已取消"));
+      };
+
+      xhr.timeout = 60000;
+      xhr.send(fd);
+    });
   } catch (err: any) {
     console.error("========== 提交失败 - 详细错误信息 ==========");
     console.error("错误对象:", err);
     console.error("错误消息:", err?.message);
-    console.error("错误响应:", err?.response);
-
-    // 处理错误响应
-    let errorMessage = err?.message || "未知错误";
-
-    if (err?.response) {
-      const status = err.response.status;
-      const statusText = err.response.statusText;
-      const data = err.response.data;
-
-      console.error("HTTP状态码:", status);
-      console.error("HTTP状态文本:", statusText);
-      console.error("响应数据类型:", data?.constructor?.name);
-
-      // 如果响应数据是 Blob，尝试解析为 JSON
-      if (data instanceof Blob) {
-        try {
-          const text = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsText(data);
-          });
-
-          console.error("Blob响应内容:", text);
-
-          try {
-            const jsonData = JSON.parse(text);
-            console.error("解析后的JSON错误数据:", jsonData);
-
-            // 提取错误消息，处理嵌套的异常信息
-            let extractedMessage =
-              jsonData.message || jsonData.error || jsonData.msg || `服务器错误 (${status})`;
-
-            // 如果错误消息包含嵌套的异常信息，尝试提取更清晰的错误信息
-            if (extractedMessage.includes("BizException")) {
-              // 尝试提取 msg= 后面的内容
-              const msgMatch = extractedMessage.match(/msg=([^)]+)/);
-              if (msgMatch && msgMatch[1]) {
-                extractedMessage = msgMatch[1];
-              }
-            }
-
-            errorMessage = extractedMessage;
-
-            // 打印详细的 JSON 字段信息用于调试
-            console.error("========== JSON字段详细检查 ==========");
-            console.error("functionalString 长度:", JSON.stringify(functionalPayload).length);
-            console.error("powerAttorneyString 长度:", JSON.stringify(powerAttorneyPayload).length);
-            console.error("petitionSqlString 长度:", JSON.stringify(petitionSqlPayload).length);
-            console.error(
-              "functionalString 预览:",
-              JSON.stringify(functionalPayload).substring(0, 500),
-            );
-            console.error(
-              "powerAttorneyString 预览:",
-              JSON.stringify(powerAttorneyPayload).substring(0, 500),
-            );
-            console.error(
-              "petitionSqlString 预览:",
-              JSON.stringify(petitionSqlPayload).substring(0, 500),
-            );
-
-            // 检查是否有特殊字符或格式问题
-            const functionalStr = JSON.stringify(functionalPayload);
-            const powerAttorneyStr = JSON.stringify(powerAttorneyPayload);
-            const petitionSqlStr = JSON.stringify(petitionSqlPayload);
-
-            // 检查是否有无效的 JSON 字符
-            const invalidChars = /[\x00-\x1F\x7F-\x9F]/;
-            if (invalidChars.test(functionalStr)) {
-              console.error("⚠️ functionalString 包含无效字符");
-            }
-            if (invalidChars.test(powerAttorneyStr)) {
-              console.error("⚠️ powerAttorneyString 包含无效字符");
-            }
-            if (invalidChars.test(petitionSqlStr)) {
-              console.error("⚠️ petitionSqlString 包含无效字符");
-            }
-
-            console.error("========== JSON字段检查完成 ==========");
-
-            // 如果是 JSON 格式错误，打印所有提交的 JSON 字段
-            if (errorMessage.includes("JSON") || errorMessage.includes("格式")) {
-              console.error("========== JSON字段格式检查 ==========");
-              if (functionalPayload && powerAttorneyPayload && petitionSqlPayload) {
-                console.error("functionalString:", JSON.stringify(functionalPayload, null, 2));
-                console.error(
-                  "powerAttorneyString:",
-                  JSON.stringify(powerAttorneyPayload, null, 2),
-                );
-                console.error("petitionSqlString:", JSON.stringify(petitionSqlPayload, null, 2));
-                console.error("file (URL数组):", JSON.stringify(pendingFileUrls.value, null, 2));
-                console.error(
-                  "fileAttached (URL数组):",
-                  JSON.stringify(attachedFileUrls.value, null, 2),
-                );
-                console.error("images (URL数组):", JSON.stringify(imageUrls.value, null, 2));
-              } else {
-                // 如果 payload 未定义，重新构建
-                console.error("重新构建 payload 用于错误分析...");
-                const errorFunctionalPayload = buildFunctionalPayload();
-                const errorPowerAttorneyPayload = buildPowerAttorneyPayload();
-                const errorPetitionSqlPayload = buildPetitionSqlPayload();
-
-                console.error("functionalString:", JSON.stringify(errorFunctionalPayload, null, 2));
-                console.error(
-                  "powerAttorneyString:",
-                  JSON.stringify(errorPowerAttorneyPayload, null, 2),
-                );
-                console.error(
-                  "petitionSqlString:",
-                  JSON.stringify(errorPetitionSqlPayload, null, 2),
-                );
-                console.error("file (URL数组):", JSON.stringify(pendingFileUrls.value, null, 2));
-                console.error(
-                  "fileAttached (URL数组):",
-                  JSON.stringify(attachedFileUrls.value, null, 2),
-                );
-                console.error("images (URL数组):", JSON.stringify(imageUrls.value, null, 2));
-              }
-            }
-          } catch (parseErr) {
-            // 如果不是 JSON，直接使用文本内容
-            errorMessage = text || `服务器错误 (${status} ${statusText})`;
-          }
-        } catch (blobErr) {
-          console.error("解析Blob响应失败:", blobErr);
-          errorMessage = `服务器错误 (${status} ${statusText})`;
-        }
-      } else if (data && typeof data === "object") {
-        // 如果响应数据是普通对象
-        console.error("后端返回的错误数据:", data);
-        errorMessage = data.message || data.error || data.msg || `服务器错误 (${status})`;
-      } else if (typeof data === "string") {
-        // 如果响应数据是字符串
-        errorMessage = data || `服务器错误 (${status} ${statusText})`;
-      } else {
-        errorMessage = `服务器错误 (${status} ${statusText})`;
-      }
-    }
-
     console.error("========== 错误信息结束 ==========");
-    ElMessage.error(`提交失败: ${errorMessage}`);
+    ElMessage.error(`提交失败: ${err?.message || "未知错误"}`);
   }
 }
 

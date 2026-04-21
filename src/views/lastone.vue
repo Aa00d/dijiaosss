@@ -1917,7 +1917,7 @@ const handlePendingFileSelect = async (event: Event) => {
       formdata.append("internal_code", internalCode);
 
       console.log("🔧 实际请求信息:");
-      console.log("  - URL: http://t6ce5869.natappfree.cc/api/files/upload-with-code");
+      console.log("  - URL: http://f589564d.natappfree.cc/api/files/upload-with-code");
       console.log("  - Method: POST");
       console.log("  - Body: FormData");
       console.log("  - FormData内容:");
@@ -1946,7 +1946,7 @@ const handlePendingFileSelect = async (event: Event) => {
       const startTime = Date.now();
 
       const response = await fetch(
-        "http://t6ce5869.natappfree.cc/api/files/upload-with-code",
+        "http://f589564d.natappfree.cc/api/files/upload-with-code",
         requestOptions,
       );
 
@@ -2138,7 +2138,7 @@ const handleFileSelect = async (event: Event) => {
     formdata.append("internal_code", internalCode);
 
     console.log("🔧 实际请求信息:");
-    console.log("  - URL: http://t6ce5869.natappfree.cc/api/files/upload-with-code");
+    console.log("  - URL: http://f589564d.natappfree.cc/api/files/upload-with-code");
     console.log("  - Method: POST");
     console.log("  - Body: FormData");
     console.log("  - FormData内容:");
@@ -2165,7 +2165,7 @@ const handleFileSelect = async (event: Event) => {
     const startTime = Date.now();
 
     const response = await fetch(
-      "http://t6ce5869.natappfree.cc/api/files/upload-with-code",
+      "http://f589564d.natappfree.cc/api/files/upload-with-code",
       requestOptions,
     );
 

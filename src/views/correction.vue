@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch, computed, nextTick } from "vue";
-import type { Ref } from "vue";
+import { ref, reactive, onMounted, watch, computed, nextTick,type } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { getCaseInfo } from "../js/useCaseSummary.js";
 import { useRoute, useRouter } from "vue-router";
@@ -18,7 +17,7 @@ import { useFileDelete, deleteFileById } from "../js/useFileDelete.js";
 const zipData = ref<ArrayBuffer | null>(null);
 // API配置 - 使用代理路径避免CORS问题
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-//const API_BASE_URL = 'http://t6ce5869.natappfree.cc/api'
+//const API_BASE_URL = 'http://f589564d.natappfree.cc/api'
 // 提交接口专用基地址（仅提交补正XML走此地址）
 const SUBMISSION_BASE_URL = "http://47.108.144.113:9111/api";
 // 补正数据接口类型定义

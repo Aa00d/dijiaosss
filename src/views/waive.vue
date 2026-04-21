@@ -570,7 +570,7 @@ const loadWaiveDeclarationFiles = async () => {
               url = url.split("?")[0];
 
               // 尝试提取域名后的路径部分
-              const pathMatch = url.match(/[^\/]+\/(.+)/);
+              const pathMatch = url.match(/[^/]+\/(.+)/);
               if (pathMatch && pathMatch[1]) {
                 const path = pathMatch[1];
                 // 如果路径不以 cases/ 开头，添加它
@@ -1068,7 +1068,7 @@ const onImageSelected = async (e: Event) => {
           url = url.split("?")[0];
 
           // 尝试提取域名后的路径部分
-          const pathMatch = url.match(/[^\/]+\/(.+)/);
+          const pathMatch = url.match(/[^/]+\/(.+)/);
           if (pathMatch && pathMatch[1]) {
             const path = pathMatch[1];
             // 如果路径不以 cases/ 开头，添加它
@@ -1296,7 +1296,7 @@ const onDelete = async () => {
 // API调用函数（已删除查询所有功能）
 // const fetchAllAbandonPatentStatements = async (): Promise<ApiResponse> => {
 //   try {
-//     const response = await fetch('http://t6ce5869.natappfree.cc/api/abandon-patent-statement/all', {
+//     const response = await fetch('http://f589564d.natappfree.cc/api/abandon-patent-statement/all', {
 //       method: 'GET',
 //       headers: {
 //         'Content-Type': 'application/json',
@@ -2095,7 +2095,7 @@ const submitAbandonXml = async () => {
     const disposition = resp.headers.get("content-disposition") || "";
     let filename = "放弃专利声明.zip";
     const matchRFC = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
-    const matchQuoted = /filename=\"?([^\";]+)\"?/i.exec(disposition);
+    const matchQuoted = /filename="?([^";]+)"?/i.exec(disposition);
     if (matchRFC && matchRFC[1]) {
       filename = decodeURIComponent(matchRFC[1].trim());
     } else if (matchQuoted && matchQuoted[1]) {
@@ -2288,7 +2288,7 @@ const uploadZipBytes = async (arrayBuffer: ArrayBuffer) => {
       console.error(
         '  1. 控制台是否有"🔄 代理请求"日志？如果没有，说明代理没有工作，需要重启开发服务器',
       );
-      console.error("  2. 后端服务器 http://t6ce5869.natappfree.cc 是否正常运行？");
+      console.error("  2. 后端服务器 http://f589564d.natappfree.cc 是否正常运行？");
       console.error("  3. 网络连接是否正常？");
     } else if (err?.response?.status === 404) {
       errorType = "404错误";
