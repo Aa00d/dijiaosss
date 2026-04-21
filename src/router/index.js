@@ -27,9 +27,8 @@ import InReviewView from '../views/InReviewView.vue'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    //待处理
     { path: '/', redirect: '/pending' },
-    // 兼容旧路径
-    // 新增与侧边栏对应的路径
     { path: '/pending', name: 'pending', component: PendingView },
     // 请求书√
     { path: '/request', name: 'request', component: RequestBookTab },
