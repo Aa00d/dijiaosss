@@ -497,7 +497,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from "vue";
 import "../components/RespondViewStyles.css";
 import { ElMessage } from "element-plus";
@@ -507,6 +507,8 @@ import { usePdfViewer } from "../js/usePdfViewer.js";
 import { uploadFileWithInternalCode, getInternalCodeByFileType } from "../js/InternalCode.js";
 import { getFilesBySubmission } from "../js/useFileList.js";
 import { deleteFileById } from "../js/useFileDelete.js";
+import axios from "axios";
+import { useUploadZipBytes } from "../js/useUploadZipBytes.js";
 const zipData = ref(null);
 const isXmlTransforming = ref(false);
 
@@ -1947,13 +1949,13 @@ function buildStatementXmlPayload() {
 function buildStatementXmlFiles() {
   // 合并 statementFiles 和 additionalFiles 中的文件
   const allFiles = [...statementFiles.value, ...additionalFiles.value];
-  
+
   return allFiles
     .map((item, index) => {
       const fileUrl = normalizeRemoteUrl(item.fileUrl || item.url || "");
       const baseUrl = item.base_url || "";
       const signedUrl = item.signed_url || item.url || "";
-      
+
       if (!fileUrl && !baseUrl && !signedUrl) return null;
 
       return {
@@ -1975,7 +1977,7 @@ function getComparisonPageUrl() {
 }
 
 async function uploadXmlAndDownloadZip() {
-  const { caseId } = getParamsFromUrl();
+  const { processesId, caseId } = getParamsFromUrl();
   if (!caseId) {
     ElMessage.error("地址栏缺少 case_id，无法启动转档XML");
     return;
@@ -1994,102 +1996,82 @@ async function uploadXmlAndDownloadZip() {
 
     const url = "http://47.108.144.113:9111/api/word/statement-opinion/xml";
     console.log("🚀 答复审查意见 XML 接口地址:", url);
-    console.log("🚀 提交 XML payload:", payload);
+    console.log("🚀 提交 XML Payload:", payload);
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
+    const resp = await axios.post(url, payload, { responseType: "blob" });
+    const blob = resp.data as Blob;
 
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`提交失败: ${res.status} ${txt}`);
+    const contentType = (
+      resp.headers?.["content-type"] ||
+      resp.headers?.["Content-Type"] ||
+      ""
+    ).toLowerCase();
+
+    if (contentType.includes("application/json")) {
+      const text = await blob.text();
+      try {
+        const json = JSON.parse(text);
+        ElMessage.error(json.message || "提交失败（返回JSON）");
+      } catch {
+        ElMessage.error("提交失败（返回JSON），请检查参数");
+      }
+      return;
     }
-
-    const contentType = res.headers.get("content-type") || "";
-    const disposition = res.headers.get("content-disposition") || "";
-    console.log("📦 XML接口响应头:", {
-      contentType,
-      disposition,
-      status: res.status,
-    });
-
-    if (contentType.includes("application/json") || contentType.includes("text/plain")) {
-      const text = await res.text();
-      console.error("❌ XML接口返回的不是zip，而是文本/JSON:", text);
-      throw new Error(text || "后端未返回zip文件");
-    }
-
-    const blob = await res.blob();
 
     if (!blob || blob.size === 0) {
-      throw new Error("后端返回的zip文件为空");
+      ElMessage.error("提交成功但无内容返回，无法下载");
+      return;
     }
 
-    if (
-      contentType &&
-      !contentType.includes("zip") &&
-      !contentType.includes("octet-stream")
-    ) {
-      try {
-        const text = await blob.text();
-        if (text && (text.startsWith("{") || text.startsWith("[") || text.includes("message"))) {
-          console.error("❌ blob内容看起来不是zip，而是文本:", text);
-          throw new Error(text);
-        }
-      } catch (blobTextErr) {
-        if (blobTextErr instanceof Error) {
-          throw blobTextErr;
-        }
-      }
-    }
-
+    const disposition =
+      resp.headers?.["content-disposition"] || resp.headers?.["Content-Disposition"] || "";
     let downloadFileName = "答复审查意见转档结果.zip";
-    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-    const normalMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
-    if (utf8Match?.[1]) {
-      downloadFileName = decodeURIComponent(utf8Match[1]);
-    } else if (normalMatch?.[1]) {
-      downloadFileName = decodeURIComponent(normalMatch[1].replace(/['"]/g, ""));
+    const matchRFC = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+    const matchQuoted = /filename=\"?([^\";]+)\"?/i.exec(disposition);
+    if (matchRFC && matchRFC[1]) {
+      downloadFileName = decodeURIComponent(matchRFC[1].trim());
+    } else if (matchQuoted && matchQuoted[1]) {
+      downloadFileName = decodeURIComponent(matchQuoted[1].trim());
     }
 
-    const downloadBlob = new Blob([blob], { type: contentType || "application/zip" });
-    const downloadUrl = URL.createObjectURL(downloadBlob);
-    const link = document.createElement("a");
-    link.href = downloadUrl;
-    link.download = downloadFileName;
-    link.style.display = "none";
-    document.body.appendChild(link);
+    const triggerZipDownload = () => {
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = downloadFileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    };
 
-    const clickEvent = new MouseEvent("click", {
-      view: window,
-      bubbles: true,
-      cancelable: true,
-    });
-    link.dispatchEvent(clickEvent);
+    try {
+      const buffer = await blob.arrayBuffer();
+      zipData.value = buffer;
 
-    setTimeout(() => {
-      try {
-        window.open(downloadUrl, "_blank", "noopener,noreferrer");
-      } catch (openErr) {
-        console.warn("window.open 下载兜底失败:", openErr);
+      const uploadResult = await useUploadZipBytes({
+        arrayBuffer: buffer,
+        caseProcessesId: Number(processesId),
+        caseId: Number(caseId),
+        submissionPage: "答复审查意见",
+        uploadUrl: `${import.meta.env.VITE_API_BASE_URL}/files/upload-by-bytes`,
+        timeout: 120000,
+      });
+
+      if (uploadResult.success) {
+        triggerZipDownload();
+        ElMessage.success(
+          `答复审查意见XML生成成功，已上传${uploadResult.uploaded_count || 0}个文件到后端并自动下载`,
+        );
+      } else {
+        ElMessage.error(`上传失败: ${uploadResult.message || "未知错误"}`);
       }
-    }, 300);
-
-    setTimeout(() => {
-      try {
-        document.body.removeChild(link);
-      } catch {
-        // ignore
-      }
-      URL.revokeObjectURL(downloadUrl);
-    }, 5000);
-
-    zipData.value = await downloadBlob.arrayBuffer();
-    ElMessage.success(`ZIP 已开始下载：${downloadFileName}`);
+    } catch (parseError) {
+      console.error("处理ZIP文件失败:", parseError);
+      ElMessage.error(`处理ZIP文件失败: ${parseError.message || "未知错误"}`);
+      triggerZipDownload();
+      ElMessage.success("答复审查意见XML生成成功，已开始下载");
+    }
   } catch (error) {
     console.error("XML 转档失败:", error);
     ElMessage.error(error.message || "XML 转档失败");

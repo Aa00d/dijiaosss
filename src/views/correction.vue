@@ -2202,14 +2202,14 @@ async function uploadZipFromUrl(zipUrl: string) {
     const getBlob = await getResp.blob();
     const buffer = await getBlob.arrayBuffer();
 
-    const BIN_UPLOAD_BASE = import.meta.env.VITE_API_BASE_URL;
+    const BIN_UPLOAD_BASE = API_BASE_URL;
     const params = new URLSearchParams({
       case_processes_id: String(caseProcessesId.value),
       case_id: String(caseId.value),
       submission_page: "补正",
       special: "666",
     });
-    const endpoint = `${BIN_UPLOAD_BASE}/api/files/upload-by-bytes?${params.toString()}`;
+    const endpoint = `${BIN_UPLOAD_BASE}/files/upload-by-bytes?${params.toString()}`;
     console.log("转发ZIP到:", endpoint);
     const postResp = await fetch(endpoint, {
       method: "POST",
